@@ -1,99 +1,110 @@
 # Configuration
 
 Config file: `plugins/SimpleEco/config.yml`  
-Reload without restart: `/eco reload`
+Reload command: `/eco reload`
 
-Most settings can be reloaded safely with `/eco reload`, but storage backend changes should be treated as a stop-the-server maintenance task.
-
----
+Most settings reload safely. Storage backend and storage file changes do not. Treat those as stop-the-server maintenance.
 
 ## Currency
 
 ```yaml
 currency:
-  id: "simpleeco"          # Internal ID used by VaultUnlocked multi-currency queries
-  name-singular: "Dollar"  # Used when balance == 1
-  name-plural: "Dollars"   # Used when balance != 1
-  decimal-digits: 2        # Decimal places shown (0–8)
-  starting-balance: 0.00   # Balance for new accounts
+  id: "simpleeco"
+  name-singular: "Dollar"
+  name-plural: "Dollars"
+  decimal-digits: 2
+  starting-balance: 0.00
+  max-balance: -1
 ```
 
-Production note:
+Notes:
 
-- `decimal-digits` should be treated as a data-formatting choice, not something to flip repeatedly after launch.
-- `starting-balance` only affects new accounts and `/eco reset`.
+- `decimal-digits` controls rounding and display.
+- `starting-balance` affects new accounts and `/eco reset`.
+- `max-balance: -1` means unlimited.
 
 ## Storage
 
 ```yaml
 storage:
-  type: sqlite   # sqlite or h2
+  type: sqlite
   sqlite:
     file: economy.db
   h2:
-    file: economy  # H2 appends .mv.db automatically
+    file: economy
 ```
 
-Both backends store data in `plugins/SimpleEco/`.
+Notes:
 
-Production notes:
+- Data is stored under `plugins/SimpleEco/`.
+- `sqlite` is the default.
+- Changing backend or file name does not move old data.
 
-- SQLite is the default and is the simplest choice for a single local server.
-- H2 is also supported, but it is still local embedded storage.
-- Switching backend type or file name does not migrate data automatically.
-- Back up the whole `plugins/SimpleEco/` directory before storage changes.
-
-## Auto-save
+## Auto-Save
 
 ```yaml
-autosave-interval: 30   # Seconds between background saves to disk (values <= 0 are clamped to 1)
+autosave-interval: 30
 ```
 
-All balance changes are applied in-memory instantly. The auto-save flush writes dirty accounts to the database periodically. Data is also flushed on server shutdown.
+Notes:
 
-Production notes:
-
-- Lower values reduce worst-case balance loss after an unclean crash, but increase disk activity.
-- `10` to `30` seconds is a reasonable production starting range.
-- `1` or `2` seconds is useful for staging or persistence stress tests, not usually as a first production default.
+- Value is in seconds.
+- Values less than 1 are clamped to 1.
+- Lower values reduce possible loss after an unclean stop, but write more often.
 
 ## Pay
 
 ```yaml
 pay:
-  cooldown-seconds: 0    # Seconds a player must wait between /pay uses (0 = disabled)
-  tax-percent: 0.0       # Percentage deducted from sent amount (0.0 = disabled)
-  min-amount: 0.01       # Smallest transfer that will be accepted
+  cooldown-seconds: 0
+  tax-percent: 0.0
+  min-amount: 0.01
 ```
 
-**Example:** `tax-percent: 5.0` means sending $100 costs the sender $100 but the receiver gets $95.
+Notes:
 
-Production notes:
+- `cooldown-seconds: 0` disables cooldown.
+- `tax-percent` is deducted from the sent amount before the receiver is credited.
+- `min-amount` rejects transfers smaller than the configured value after scaling.
 
-- Use `cooldown-seconds` or a non-trivial `min-amount` if you want to suppress spammy transfer loops.
-- Tax reduces the global money supply unless you add your own sink/source logic elsewhere.
+Example: `tax-percent: 5.0` means sending 100 deducts 100 from the sender and credits 95 to the receiver.
 
 ## Baltop
 
 ```yaml
 baltop:
-  page-size: 10           # Entries per page
-  cache-ttl-seconds: 30   # How long the sorted leaderboard is cached
+  page-size: 10
+  cache-ttl-seconds: 30
 ```
 
-Production note:
+Notes:
 
-- Higher TTL values reduce repeated sorting work at the cost of slightly staler leaderboard views.
+- Higher cache TTL lowers repeated sort cost.
+- Higher cache TTL also means slightly older leaderboard views.
+
+## History
+
+```yaml
+history:
+  retention-days: -1
+```
+
+Notes:
+
+- `-1` keeps all history.
+- A positive value deletes older history rows in the background.
+- Deleting rows does not guarantee the SQLite file shrinks immediately.
 
 ## Messages
 
-All messages use [MiniMessage](https://docs.advntr.dev/minimessage/format.html) format.
+Messages use [MiniMessage](https://docs.advntr.dev/minimessage/format.html).
 
-Operational note:
+Keep these warnings present unless you replace them with equivalent text:
 
-- `account-sync-failed` and `account-name-conflict` are important production-facing safety messages and should not be removed unless you replace them with equivalent warnings.
+- `account-sync-failed`
+- `account-name-conflict`
 
-Available placeholders per message key:
+Common placeholders:
 
 | Key | Placeholders |
 |---|---|
@@ -108,13 +119,10 @@ Available placeholders per message key:
 | `eco-take` | `<player>`, `<amount>`, `<balance>` |
 | `eco-set` | `<player>`, `<balance>` |
 | `eco-reset` | `<player>`, `<balance>` |
+| `eco-delete` | `<player>` |
+| `eco-balance-limit` | `<player>`, `<limit>` |
 | `baltop-header` | `<page>`, `<total>` |
 | `baltop-entry` | `<rank>`, `<player>`, `<balance>` |
 | `history-header` | `<player>`, `<page>`, `<total>` |
-| `history-give/take/set/reset` | `<date>`, `<amount>`, `<balance>` |
-| `history-pay-sent/received` | `<date>`, `<amount>`, `<counterpart>` |
-
-**Example** — gradient header:
-```yaml
-baltop-header: "<gradient:gold:yellow><bold>--- Balance Top (<page>/<total>) ---</bold></gradient>"
-```
+| `history-pay-sent` | `<date>`, `<amount>`, `<counterpart>` |
+| `history-pay-received` | `<date>`, `<amount>`, `<counterpart>` |

@@ -1,18 +1,18 @@
 # SimpleEco Addon API
 
-SimpleEco now exposes a plugin-native addon API that is independent from VaultUnlocked and does not leak JDBC exceptions or internal mutable models.
+Server owners can ignore this file unless another plugin integrates with SimpleEco directly.
 
-This API is intended for production plugin integrations on the same server, not for cross-server coordination or async fire-and-forget writes from arbitrary threads.
+The API is for same-server integrations. It is not a cross-server sync layer.
 
 ## Setup
 
-Add SimpleEco as a dependency in your `plugin.yml`:
+Add SimpleEco as a dependency in `plugin.yml`:
 
 ```yaml
 depend: [SimpleEco]
 ```
 
-Prefer fetching the API through Bukkit services:
+Resolve the service through Bukkit:
 
 ```java
 RegisteredServiceProvider<SimpleEcoApi> registration = Bukkit.getServicesManager()
@@ -24,22 +24,9 @@ if (registration == null) {
 SimpleEcoApi api = registration.getProvider();
 ```
 
-`SimpleEcoPlugin#getApi()` still exists as a convenience method, but the service contract is the primary integration surface.
+Call mutating methods from a safe server thread. The API does not move async addon calls onto the right thread for you.
 
-Call mutating methods from a normal server thread on Paper or from the owning region thread on Folia. The API does not marshal async addon calls onto a safe thread for you.
-
-Production guidance:
-
-- Resolve the service during your plugin startup and fail fast if it is missing.
-- Treat result objects as authoritative. Do not infer success from side effects.
-- Handle `NAME_IN_USE`, `FAILED`, `CANCELLED`, and `SELF_TRANSFER` explicitly in your integration code.
-- Do not build features that assume SimpleEco is a shared cross-server ledger.
-
----
-
-## Core Contract
-
-Main interface: `dev.alexisbinh.simpleeco.api.SimpleEcoApi`
+## Main Methods
 
 ### Accounts
 
@@ -52,30 +39,9 @@ Main interface: `dev.alexisbinh.simpleeco.api.SimpleEcoApi`
 | `renameAccount(UUID, String)` | `AccountOperationResult` |
 | `deleteAccount(UUID)` | `AccountOperationResult` |
 
-`AccountSnapshot` is immutable and contains:
+Account names are trimmed, non-blank, max 16 characters, and unique ignoring case.
 
-- `id`
-- `lastKnownName`
-- `balance`
-- `createdAt`
-- `updatedAt`
-
-`AccountOperationResult.Status` values:
-
-- `CREATED`
-- `RENAMED`
-- `DELETED`
-- `ALREADY_EXISTS`
-- `NAME_IN_USE`
-- `NOT_FOUND`
-- `UNCHANGED`
-- `FAILED`
-
-Account names must be non-blank, trimmed, and at most 16 characters long. Create and rename operations also reject names that are already in use by another account, case-insensitively.
-
-If your addon mirrors player names into accounts, validate or sanitize those names before treating account creation or rename failures as unexpected.
-
-### Balance operations
+### Balances
 
 | Method | Result |
 |---|---|
@@ -88,30 +54,13 @@ If your addon mirrors player names into accounts, validate or sanitize those nam
 | `setBalance(UUID, BigDecimal)` | `BalanceChangeResult` |
 | `reset(UUID)` | `BalanceChangeResult` |
 
-`BalanceCheckResult.Status` values:
-
-- `ALLOWED`
-- `ACCOUNT_NOT_FOUND`
-- `INVALID_AMOUNT`
-- `INSUFFICIENT_FUNDS`
-- `BALANCE_LIMIT`
-
-`BalanceChangeResult.Status` values:
-
-- `SUCCESS`
-- `ACCOUNT_NOT_FOUND`
-- `INVALID_AMOUNT`
-- `INSUFFICIENT_FUNDS`
-- `BALANCE_LIMIT`
-- `CANCELLED`
+`has(UUID, BigDecimal)` requires a non-negative amount.
 
 ### Transfers
 
-```java
-TransferResult result = api.transfer(fromId, toId, amount);
-```
+`transfer(UUID, UUID, BigDecimal)` returns `TransferResult`.
 
-`TransferResult.Status` values:
+Possible statuses:
 
 - `SUCCESS`
 - `COOLDOWN`
@@ -123,97 +72,39 @@ TransferResult result = api.transfer(fromId, toId, amount);
 - `INVALID_AMOUNT`
 - `SELF_TRANSFER`
 
-### History and leaderboard
+### History And Leaderboard
 
-```java
-HistoryPage history = api.getHistory(playerId, 1, 20);
-List<AccountSnapshot> top = api.getTopAccounts(10);
-```
+| Method | Result |
+|---|---|
+| `getHistory(UUID, int, int)` | `HistoryPage` |
+| `getHistory(UUID, int, int, HistoryFilter)` | `HistoryPage` |
+| `getTopAccounts(int)` | `List<AccountSnapshot>` |
+| `getRankOf(UUID)` | `int` |
+| `logCustomTransaction(UUID, BigDecimal, TransactionKind)` | `void` |
 
-`HistoryPage` contains the requested page, page size, total entry count, total page count, and immutable `TransactionSnapshot` entries.
+`logCustomTransaction(...)` records a history entry without changing a balance. Its amount must be positive.
 
-`TransactionSnapshot` uses public enum `TransactionKind`:
+### Currency
 
-- `GIVE`
-- `TAKE`
-- `SET`
-- `RESET`
-- `PAY_SENT`
-- `PAY_RECEIVED`
+`getCurrencyInfo()` returns ID, display names, fractional digits, starting balance, and max balance.
 
-### Currency metadata
+`format(BigDecimal)` returns the plugin's formatted currency string.
 
-```java
-CurrencyInfo currency = api.getCurrencyInfo();
-String formatted = api.format(new BigDecimal("1250.50"));
-```
+## Error Model
 
-`CurrencyInfo` includes:
-
-- `id`
-- `singularName`
-- `pluralName`
-- `fractionalDigits`
-- `startingBalance`
-- `maxBalance` (nullable when unlimited)
-
-### Error handling
-
-`SimpleEcoApiException` is only used for API-level exceptional failures such as history lookup errors. Normal business-rule rejections are represented through result/status objects instead of exceptions.
-
----
+- Normal business failures are returned as status objects.
+- `SimpleEcoApiException` is for API-level failures such as history lookup errors.
 
 ## Events
 
-All events are in `dev.alexisbinh.simpleeco.event`.
-
-### AccountCreateEvent
-
-Fired after a new account is created. Not cancellable.
-
-### AccountRenameEvent
-
-Fired before an account rename is applied. Cancellable.
-
-### AccountDeleteEvent
-
-Fired before an account is deleted. Cancellable.
-
-### BalanceChangeEvent
-
-Fired before give, take, set, and reset operations. Cancellable.
-
-### PayEvent
-
-Fired before a transfer is processed. Cancellable.
-
----
+SimpleEco exposes Bukkit events for account create, rename, delete, balance changes, and payments.
 
 ## Example
 
 ```java
-public class ShopPlugin extends JavaPlugin {
-
-    private SimpleEcoApi eco;
-
-    @Override
-    public void onEnable() {
-        RegisteredServiceProvider<SimpleEcoApi> registration = getServer()
-                .getServicesManager()
-                .getRegistration(SimpleEcoApi.class);
-        if (registration == null) {
-            getLogger().severe("SimpleEco API not found! Disabling.");
-            getServer().getPluginManager().disablePlugin(this);
-            return;
-        }
-        eco = registration.getProvider();
-    }
-
-    public boolean charge(Player player, BigDecimal price) {
-        BalanceChangeResult result = eco.withdraw(player.getUniqueId(), price);
-        return result.isSuccess();
-    }
+BalanceChangeResult result = api.withdraw(player.getUniqueId(), price);
+if (!result.isSuccess()) {
+    return false;
 }
+return true;
 ```
-
-For production integrations, prefer explicit result handling over a bare boolean when the caller needs to distinguish between insufficient funds, invalid input, plugin cancellation, or balance caps.

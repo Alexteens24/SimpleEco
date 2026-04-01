@@ -1,65 +1,74 @@
 # SimpleEco
 
-Single-server economy plugin for Paper/Folia servers. SimpleEco is designed around an in-memory account cache with local embedded persistence and a VaultUnlocked v2-compatible economy provider.
+SimpleEco is an economy plugin for one Paper or Folia server.
+
+What it does:
+
+- Keeps balances in memory for fast reads and writes.
+- Stores data locally in SQLite or H2 under `plugins/SimpleEco/`.
+- Exposes Vault v1 and VaultUnlocked v2 economy providers.
+- Supports PlaceholderAPI if it is installed.
+
+What it does not do:
+
+- Cross-server or proxy-wide balance sync.
+- Automatic migration between storage backends or file names.
+- Shared database access across multiple JVMs.
 
 ## Requirements
 
 - Paper or Folia 1.21+
-- [VaultUnlocked](https://github.com/TheNewEconomy/VaultUnlocked) (hard dependency, loaded by Paper as plugin `Vault`)
-- [PlaceholderAPI](https://placeholderapi.com/) (optional)
+- [VaultUnlocked](https://github.com/TheNewEconomy/VaultUnlocked)
+- [PlaceholderAPI](https://placeholderapi.com/) if you want placeholders
 
-## Production Deployment
+VaultUnlocked is loaded by Paper as plugin `Vault`. SimpleEco depends on that runtime name.
 
-1. Upload only `SimpleEco-<version>.jar` from `build/libs/` to the server `plugins/` folder.
-2. Install VaultUnlocked. On the server plugin list it appears as `Vault`, and SimpleEco depends on that runtime plugin name.
-3. Start the server once so `plugins/SimpleEco/config.yml` is generated.
-4. Stop the server and review storage, autosave, pay, and message settings before opening the server to players.
-5. Back up the generated `plugins/SimpleEco/` directory before significant config or backend changes.
-6. Restart the server and verify that SimpleEco enables cleanly.
+## Install
 
-Production notes:
-
-- SimpleEco is intended for a single server with local embedded storage. It does not provide cross-server synchronization.
-- Switching between SQLite and H2, or changing the configured file name, does not migrate existing data automatically.
-- Do not deploy the `stress-addon` module on a production server. It is for staging and load testing only.
+1. Put `SimpleEco-<version>.jar` in `plugins/`.
+2. Install VaultUnlocked.
+3. Start the server once to generate `plugins/SimpleEco/config.yml`.
+4. Stop the server and review the config.
+5. Back up `plugins/SimpleEco/` before opening the server.
+6. Start the server again and verify `/balance`, `/baltop`, and `/history`.
 
 ## Commands
 
-| Command | Description | Permission |
+| Command | Use | Permission |
 |---|---|---|
 | `/balance [player]` | Check balance | `simpleeco.command.balance` |
-| `/baltop [page]` | Richest players leaderboard | `simpleeco.command.baltop` |
-| `/pay <player> <amount>` | Send money to a player | `simpleeco.command.pay` |
+| `/baltop [page]` | View leaderboard | `simpleeco.command.baltop` |
+| `/pay <player> <amount>` | Send money | `simpleeco.command.pay` |
 | `/eco give <player> <amount>` | Give money | `simpleeco.command.eco.give` |
 | `/eco take <player> <amount>` | Take money | `simpleeco.command.eco.take` |
 | `/eco set <player> <amount>` | Set balance | `simpleeco.command.eco.set` |
 | `/eco reset <player>` | Reset to starting balance | `simpleeco.command.eco.reset` |
-| `/eco delete <player>` | Delete account and personal history | `simpleeco.command.eco.delete` |
-| `/eco reload` | Reload config | `simpleeco.command.eco.reload` |
-| `/history [player] [page]` | Transaction history | `simpleeco.command.history` |
+| `/eco delete <player>` | Delete an account and that account's history | `simpleeco.command.eco.delete` |
+| `/eco reload` | Reload config and messages | `simpleeco.command.eco.reload` |
+| `/history [player] [page]` | View transaction history | `simpleeco.command.history` |
 
-`simpleeco.admin` grants all admin permissions at once.
+`simpleeco.admin` grants all admin permissions.
 
-## Operations
+## Owner Notes
 
-- Keep regular backups of `plugins/SimpleEco/`, especially before changing storage settings or running large-scale cleanup.
-- For SQLite, `economy.db`, `economy.db-wal`, and `economy.db-shm` are normal when WAL mode is enabled.
-- Transaction history is append-only during normal operation. Large test runs or busy production servers will grow the database over time.
-- Use [docs/production.md](docs/production.md) for backend selection, backup guidance, and production rollout notes.
+- SimpleEco is meant for one server with local storage.
+- SQLite companion files such as `economy.db-wal` and `economy.db-shm` are normal while the server is running.
+- Balance data is flushed periodically and on normal shutdown.
+- History can be kept forever or pruned with `history.retention-days`.
 
-## Building
+## Guides
+
+- [Production Guide](docs/production.md)
+- [Configuration](docs/configuration.md)
+- [Permissions](docs/permissions.md)
+- [PlaceholderAPI](docs/placeholders.md)
+- [Addon API](docs/api.md)
+- [Technical Notes](docs/technical.md)
+
+## Build From Source
 
 ```bash
 ./gradlew build
 ```
 
 Output: `build/libs/SimpleEco-<version>.jar`
-
-## Guides
-
-- [Production Guide](docs/production.md)
-- [Configuration](docs/configuration.md)
-- [Addon API](docs/api.md)
-- [Permissions](docs/permissions.md)
-- [PlaceholderAPI](docs/placeholders.md)
-- [Technical Details](docs/technical.md)
