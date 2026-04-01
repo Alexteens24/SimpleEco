@@ -39,7 +39,7 @@ baltop:
   cache-ttl-seconds: 30
 
 history:
-  # Number of days to keep transaction history (-1 = keep forever, no pruning)
+  # Number of days to keep transaction history (<= 0 = keep forever, no pruning)
   # Transactions older than this will be deleted automatically once per day.
   retention-days: -1
 

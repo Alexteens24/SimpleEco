@@ -94,6 +94,7 @@ Examples:
 | `getAccount(UUID)` | `Optional<AccountSnapshot>` |
 | `findByName(String)` | `Optional<AccountSnapshot>` |
 | `createAccount(UUID, String)` | `AccountOperationResult` |
+| `ensureAccount(UUID, String)` | `AccountOperationResult` |
 | `renameAccount(UUID, String)` | `AccountOperationResult` |
 | `deleteAccount(UUID)` | `AccountOperationResult` |
 
@@ -103,6 +104,18 @@ Examples:
 - names must be non-blank
 - names must be 16 characters or fewer
 - names are unique ignoring case
+
+### ensureAccount(UUID, String)
+
+`ensureAccount(...)` is the convenience method for addons that want an account to exist with a known name.
+
+Behavior:
+
+- creates the account if it does not exist yet
+- returns `UNCHANGED` if the account already exists with the same name
+- attempts a rename if the account exists but the supplied name is different
+
+This is useful for player-facing addons that want one call instead of separate create-or-rename logic.
 
 ### AccountSnapshot
 
@@ -241,6 +254,7 @@ return true;
 | Method | Result |
 |---|---|
 | `canTransfer(UUID, UUID, BigDecimal)` | `TransferCheckResult` |
+| `previewTransfer(UUID, UUID, BigDecimal)` | `TransferPreviewResult` |
 | `transfer(UUID, UUID, BigDecimal)` | `TransferResult` |
 
 ### Semantics
@@ -253,6 +267,20 @@ return true;
 - recipient max balance
 
 It does not apply cooldown or tax.
+
+`previewTransfer(...)` is the richer preflight call.
+
+It evaluates:
+
+- account existence
+- self-transfer
+- sender balance
+- recipient max balance
+- pay cooldown
+- minimum pay amount
+- tax and received amount
+
+It does not know whether another plugin will later cancel `PayEvent`.
 
 `transfer(...)` performs the full transfer path including cooldown, tax, and cancellable events.
 
@@ -300,6 +328,34 @@ Notes:
 - `received` is what the receiver gains
 - `tax` is the difference when tax is enabled
 - `cooldownRemainingMs` is only meaningful for `COOLDOWN`
+
+### TransferPreviewResult
+
+Fields:
+
+- `status`
+- `sent`
+- `received`
+- `tax`
+- `cooldownRemainingMs`
+- `minimumAmount`
+
+Statuses:
+
+- `ALLOWED`
+- `COOLDOWN`
+- `INSUFFICIENT_FUNDS`
+- `ACCOUNT_NOT_FOUND`
+- `BALANCE_LIMIT`
+- `TOO_LOW`
+- `INVALID_AMOUNT`
+- `SELF_TRANSFER`
+
+Notes:
+
+- `sent`, `received`, and `tax` reflect the current configured rounding and tax rules
+- `cooldownRemainingMs` is only meaningful for `COOLDOWN`
+- `minimumAmount` is populated only when `status` is `TOO_LOW`; otherwise it is `null`
 
 ## History
 
@@ -404,6 +460,7 @@ Notes:
 
 | Method | Result |
 |---|---|
+| `getRules()` | `EconomyRulesSnapshot` |
 | `getCurrencyInfo()` | `CurrencyInfo` |
 | `format(BigDecimal)` | `String` |
 
@@ -419,6 +476,23 @@ Fields:
 - `maxBalance`
 
 Use `hasMaxBalance()` before reading `maxBalance` as a hard limit.
+
+### EconomyRulesSnapshot
+
+Fields:
+
+- `currency`
+- `payCooldownMs`
+- `payTaxRate`
+- `payMinAmount`
+- `balTopCacheTtlMs`
+- `historyRetentionDays`
+
+Notes:
+
+- `currency` is the same data shape returned by `getCurrencyInfo()`
+- `payMinAmount` is `null` when no minimum is enforced
+- `historyRetentionDays` is normalized to `-1` when history is kept forever or pruning is disabled
 
 ## Exceptions
 

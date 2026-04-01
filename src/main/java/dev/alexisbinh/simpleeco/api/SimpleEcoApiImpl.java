@@ -56,6 +56,28 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
     }
 
     @Override
+    public AccountOperationResult ensureAccount(UUID accountId, String name) {
+        UUID validatedId = requireAccountId(accountId);
+        String validatedName = requireName(name);
+
+        Optional<AccountSnapshot> currentOpt = getAccount(validatedId);
+        if (currentOpt.isPresent()) {
+            return reconcileExistingAccount(validatedId, validatedName, currentOpt.get());
+        }
+
+        return switch (service.createAccountDetailed(validatedId, validatedName)) {
+            case CREATED -> getAccount(validatedId)
+                    .map(AccountOperationResult::created)
+                    .orElseGet(() -> AccountOperationResult.failed(null, "Account was created but could not be reloaded"));
+            case ALREADY_EXISTS -> getAccount(validatedId)
+                    .map(current -> reconcileExistingAccount(validatedId, validatedName, current))
+                    .orElseGet(() -> AccountOperationResult.failed(null, "Account already exists but could not be reloaded"));
+            case NAME_IN_USE -> AccountOperationResult.nameInUse(null);
+            case INVALID_NAME -> AccountOperationResult.failed(null, "Invalid account name");
+        };
+    }
+
+    @Override
     public AccountOperationResult renameAccount(UUID accountId, String newName) {
         UUID validatedId = requireAccountId(accountId);
         String validatedName = requireName(newName);
@@ -65,21 +87,7 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
             return AccountOperationResult.notFound();
         }
 
-        AccountSnapshot current = currentOpt.get();
-        if (current.lastKnownName().equals(validatedName)) {
-            return AccountOperationResult.unchanged(current);
-        }
-
-        return switch (service.renameAccountDetailed(validatedId, validatedName)) {
-            case RENAMED -> getAccount(validatedId)
-                    .map(AccountOperationResult::renamed)
-                    .orElseGet(() -> AccountOperationResult.failed(current, "Account was renamed but could not be reloaded"));
-            case NOT_FOUND -> AccountOperationResult.notFound();
-            case UNCHANGED -> AccountOperationResult.unchanged(current);
-            case NAME_IN_USE -> AccountOperationResult.nameInUse(current);
-            case INVALID_NAME -> AccountOperationResult.failed(current, "Invalid account name");
-            case CANCELLED -> AccountOperationResult.failed(current, "Account rename was cancelled or could not be applied");
-        };
+        return reconcileExistingAccount(validatedId, validatedName, currentOpt.get());
     }
 
     @Override
@@ -171,6 +179,11 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
                 result.getReceived(),
                 result.getTax(),
                 result.getCooldownRemainingMs());
+    }
+
+    @Override
+    public TransferPreviewResult previewTransfer(UUID fromId, UUID toId, BigDecimal amount) {
+        return service.previewTransfer(requireAccountId(fromId), requireAccountId(toId), requireAmount(amount));
     }
 
     @Override
@@ -267,6 +280,17 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
     }
 
     @Override
+    public EconomyRulesSnapshot getRules() {
+        return new EconomyRulesSnapshot(
+                getCurrencyInfo(),
+                service.getPayCooldownMs(),
+                service.getPayTaxRate(),
+                service.getPayMinAmount(),
+                service.getBalTopCacheTtlMs(),
+                service.getHistoryRetentionDays());
+    }
+
+    @Override
     public CurrencyInfo getCurrencyInfo() {
         return new CurrencyInfo(
                 service.getCurrencyId(),
@@ -291,6 +315,24 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
                 response.amount,
                 previousBalance,
                 response.transactionSuccess() ? response.balance : previousBalance);
+    }
+
+    private AccountOperationResult reconcileExistingAccount(UUID accountId, String validatedName,
+                                                            AccountSnapshot current) {
+        if (current.lastKnownName().equals(validatedName)) {
+            return AccountOperationResult.unchanged(current);
+        }
+
+        return switch (service.renameAccountDetailed(accountId, validatedName)) {
+            case RENAMED -> getAccount(accountId)
+                    .map(AccountOperationResult::renamed)
+                    .orElseGet(() -> AccountOperationResult.failed(current, "Account was renamed but could not be reloaded"));
+            case NOT_FOUND -> AccountOperationResult.notFound();
+            case UNCHANGED -> AccountOperationResult.unchanged(current);
+            case NAME_IN_USE -> AccountOperationResult.nameInUse(current);
+            case INVALID_NAME -> AccountOperationResult.failed(current, "Invalid account name");
+            case CANCELLED -> AccountOperationResult.failed(current, "Account rename was cancelled or could not be applied");
+        };
     }
 
     private static AccountSnapshot toAccountSnapshot(AccountRecord record) {

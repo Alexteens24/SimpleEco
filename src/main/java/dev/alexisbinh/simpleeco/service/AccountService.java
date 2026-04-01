@@ -1,5 +1,6 @@
 package dev.alexisbinh.simpleeco.service;
 
+import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.event.AccountCreateEvent;
 import dev.alexisbinh.simpleeco.event.AccountDeleteEvent;
 import dev.alexisbinh.simpleeco.event.AccountRenameEvent;
@@ -286,6 +287,10 @@ public class AccountService {
         return economyOperations.canTransfer(fromId, toId, amount);
     }
 
+    public TransferPreviewResult previewTransfer(UUID fromId, UUID toId, BigDecimal amount) {
+        return economyOperations.previewTransfer(fromId, toId, amount);
+    }
+
     // ── Transaction history ──────────────────────────────────────────────────
 
     public List<TransactionEntry> getTransactions(UUID playerId, int page, int pageSize) throws SQLException {
@@ -354,6 +359,11 @@ public class AccountService {
     public int getFractionalDigits() { return config.fractionalDigits(); }
     public BigDecimal getStartingBalance() { return config.startingBalance(); }
     public BigDecimal getMaxBalance() { return config.maxBalance(); }
+    public long getPayCooldownMs() { return config.payCooldownMs(); }
+    public BigDecimal getPayTaxRate() { return config.payTaxRate(); }
+    public BigDecimal getPayMinAmount() { return config.payMinAmount(); }
+    public long getBalTopCacheTtlMs() { return config.balTopCacheTtlMs(); }
+    public int getHistoryRetentionDays() { return config.historyRetentionDays(); }
     /** Returns the formatted max balance string, or null if unlimited. */
     public String getFormattedMaxBalance() {
         return config.maxBalance() != null ? format(config.maxBalance()) : null;

@@ -1,5 +1,6 @@
 package dev.alexisbinh.simpleeco.service;
 
+import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.api.TransferCheckResult;
 import dev.alexisbinh.simpleeco.event.BalanceChangeEvent;
 import dev.alexisbinh.simpleeco.event.PayEvent;
@@ -266,6 +267,118 @@ final class EconomyOperations {
                     return new TransferCheckResult(TransferCheckResult.Status.BALANCE_LIMIT, scaled);
                 }
                 return new TransferCheckResult(TransferCheckResult.Status.ALLOWED, scaled);
+            }
+        }
+    }
+
+    TransferPreviewResult previewTransfer(UUID fromId, UUID toId, BigDecimal rawAmount) {
+        EconomyConfigSnapshot currentConfig = configSupplier.get();
+        if (rawAmount.compareTo(BigDecimal.ZERO) <= 0) {
+            return new TransferPreviewResult(
+                    TransferPreviewResult.Status.INVALID_AMOUNT,
+                    rawAmount,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    0,
+                    null);
+        }
+
+        BigDecimal scaled = scale(rawAmount, currentConfig);
+        if (fromId.equals(toId)) {
+            return new TransferPreviewResult(
+                    TransferPreviewResult.Status.SELF_TRANSFER,
+                    scaled,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    0,
+                    null);
+        }
+
+        BigDecimal tax = scaled
+                .multiply(currentConfig.payTaxRate())
+                .divide(BigDecimal.valueOf(100), currentConfig.fractionalDigits(), RoundingMode.HALF_UP);
+        BigDecimal received = scaled.subtract(tax);
+
+        if (currentConfig.payCooldownMs() > 0) {
+            long last = lastPayTime.getOrDefault(fromId, 0L);
+            long remaining = currentConfig.payCooldownMs() - (System.currentTimeMillis() - last);
+            if (remaining > 0) {
+                return new TransferPreviewResult(
+                        TransferPreviewResult.Status.COOLDOWN,
+                        scaled,
+                        received,
+                        tax,
+                        remaining,
+                        null);
+            }
+        }
+
+        if (currentConfig.payMinAmount() != null && scaled.compareTo(currentConfig.payMinAmount()) < 0) {
+            return new TransferPreviewResult(
+                    TransferPreviewResult.Status.TOO_LOW,
+                    scaled,
+                    received,
+                    tax,
+                    0,
+                    currentConfig.payMinAmount());
+        }
+
+        AccountRecord fromRecord = accountRegistry.getLiveRecord(fromId);
+        AccountRecord toRecord = accountRegistry.getLiveRecord(toId);
+        if (fromRecord == null || toRecord == null) {
+            return new TransferPreviewResult(
+                    TransferPreviewResult.Status.ACCOUNT_NOT_FOUND,
+                    scaled,
+                    received,
+                    tax,
+                    0,
+                    null);
+        }
+
+        boolean fromFirst = fromId.compareTo(toId) < 0;
+        AccountRecord first = fromFirst ? fromRecord : toRecord;
+        AccountRecord second = fromFirst ? toRecord : fromRecord;
+
+        synchronized (first) {
+            synchronized (second) {
+                if (!accountRegistry.isLive(fromId, fromRecord) || !accountRegistry.isLive(toId, toRecord)) {
+                    return new TransferPreviewResult(
+                            TransferPreviewResult.Status.ACCOUNT_NOT_FOUND,
+                            scaled,
+                            received,
+                            tax,
+                            0,
+                            null);
+                }
+
+                if (fromRecord.getBalance().compareTo(scaled) < 0) {
+                    return new TransferPreviewResult(
+                            TransferPreviewResult.Status.INSUFFICIENT_FUNDS,
+                            scaled,
+                            received,
+                            tax,
+                            0,
+                            null);
+                }
+
+                BigDecimal toAfter = toRecord.getBalance().add(received);
+                if (currentConfig.maxBalance() != null && toAfter.compareTo(currentConfig.maxBalance()) > 0) {
+                    return new TransferPreviewResult(
+                            TransferPreviewResult.Status.BALANCE_LIMIT,
+                            scaled,
+                            received,
+                            tax,
+                            0,
+                            null);
+                }
+
+                return new TransferPreviewResult(
+                        TransferPreviewResult.Status.ALLOWED,
+                        scaled,
+                        received,
+                        tax,
+                        0,
+                        null);
             }
         }
     }

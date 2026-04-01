@@ -1,5 +1,6 @@
 package dev.alexisbinh.simpleeco.service;
 
+import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.event.BalanceChangeEvent;
 import dev.alexisbinh.simpleeco.event.PayEvent;
 import dev.alexisbinh.simpleeco.model.AccountRecord;
@@ -334,6 +335,52 @@ class EconomyOperationsTest {
         PayResult result = ops.pay(aliceId, UUID.randomUUID(), new BigDecimal("1.00"));
 
         assertEquals(PayResult.Status.ACCOUNT_NOT_FOUND, result.getStatus());
+        assertTrue(logged.isEmpty());
+    }
+
+    @Test
+    void previewTransfer_reportsAllowedAmountsWithoutMutatingState() {
+        config = configWith(10.0, 0, null, 2);
+        ops = buildOps(event -> { });
+
+        TransferPreviewResult result = ops.previewTransfer(aliceId, bobId, new BigDecimal("4.00"));
+
+        assertEquals(TransferPreviewResult.Status.ALLOWED, result.status());
+        assertEquals(0, new BigDecimal("4.00").compareTo(result.sent()));
+        assertEquals(0, new BigDecimal("0.40").compareTo(result.tax()));
+        assertEquals(0, new BigDecimal("3.60").compareTo(result.received()));
+        assertFalse(result.hasMinimumAmount());
+        assertNull(result.minimumAmount());
+        assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
+        assertEquals(0, new BigDecimal("5.00").compareTo(registry.getLiveRecord(bobId).getBalance()));
+        assertTrue(logged.isEmpty());
+    }
+
+    @Test
+    void previewTransfer_reportsCooldownBeforeMutation() {
+        config = configWith(0.0, 60, null, 2);
+        ConcurrentHashMap<UUID, Long> cooldownMap = new ConcurrentHashMap<>();
+        cooldownMap.put(aliceId, System.currentTimeMillis());
+        ops = new EconomyOperations(registry, () -> config, cooldownMap, logged::add,
+                () -> leaderboardInvalidations++, event -> { });
+
+        TransferPreviewResult result = ops.previewTransfer(aliceId, bobId, new BigDecimal("1.00"));
+
+        assertEquals(TransferPreviewResult.Status.COOLDOWN, result.status());
+        assertTrue(result.cooldownRemainingMs() > 0);
+        assertEquals(0, new BigDecimal("1.00").compareTo(result.sent()));
+        assertFalse(result.hasMinimumAmount());
+        assertNull(result.minimumAmount());
+        assertTrue(logged.isEmpty());
+    }
+
+    @Test
+    void previewTransfer_reportsMinimumAmountWhenTooLow() {
+        TransferPreviewResult result = ops.previewTransfer(aliceId, bobId, new BigDecimal("0.001"));
+
+        assertEquals(TransferPreviewResult.Status.TOO_LOW, result.status());
+        assertTrue(result.hasMinimumAmount());
+        assertEquals(0, new BigDecimal("0.01").compareTo(result.minimumAmount()));
         assertTrue(logged.isEmpty());
     }
 

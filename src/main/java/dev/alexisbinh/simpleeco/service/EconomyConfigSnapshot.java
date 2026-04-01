@@ -37,7 +37,8 @@ record EconomyConfigSnapshot(
                 : null;
 
         long balTopCacheTtlMs = Math.max(1, config.getLong("baltop.cache-ttl-seconds", 30)) * 1000L;
-        int historyRetentionDays = config.getInt("history.retention-days", -1);
+        int configuredHistoryRetentionDays = config.getInt("history.retention-days", -1);
+        int historyRetentionDays = configuredHistoryRetentionDays > 0 ? configuredHistoryRetentionDays : -1;
 
         return new EconomyConfigSnapshot(
                 config.getString("currency.id", "simpleeco"),

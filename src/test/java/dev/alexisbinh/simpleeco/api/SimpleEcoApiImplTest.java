@@ -59,6 +59,37 @@ class SimpleEcoApiImplTest {
     }
 
     @Test
+    void ensureAccountCreatesMissingAccount() {
+        UUID accountId = UUID.randomUUID();
+        AccountRecord account = new AccountRecord(accountId, "Alice", new BigDecimal("5.00"), 1L, 2L);
+
+        when(service.getAccount(accountId)).thenReturn(Optional.empty()).thenReturn(Optional.of(account));
+        when(service.createAccountDetailed(accountId, "Alice"))
+                .thenReturn(AccountService.CreateAccountStatus.CREATED);
+
+        AccountOperationResult result = api.ensureAccount(accountId, "Alice");
+
+        assertEquals(AccountOperationResult.Status.CREATED, result.status());
+        assertEquals("Alice", result.account().lastKnownName());
+    }
+
+    @Test
+    void ensureAccountRenamesExistingAccountWhenNameChanged() {
+        UUID accountId = UUID.randomUUID();
+        AccountRecord before = new AccountRecord(accountId, "Alice", new BigDecimal("5.00"), 1L, 2L);
+        AccountRecord after = new AccountRecord(accountId, "Alicia", new BigDecimal("5.00"), 1L, 3L);
+
+        when(service.getAccount(accountId)).thenReturn(Optional.of(before)).thenReturn(Optional.of(after));
+        when(service.renameAccountDetailed(accountId, "Alicia"))
+                .thenReturn(AccountService.RenameAccountStatus.RENAMED);
+
+        AccountOperationResult result = api.ensureAccount(accountId, "Alicia");
+
+        assertEquals(AccountOperationResult.Status.RENAMED, result.status());
+        assertEquals("Alicia", result.account().lastKnownName());
+    }
+
+    @Test
     void canWithdrawMapsServiceFailureIntoPluginResult() {
         UUID accountId = UUID.randomUUID();
         BigDecimal amount = new BigDecimal("15.00");
@@ -103,6 +134,27 @@ class SimpleEcoApiImplTest {
         TransferResult result = api.transfer(accountId, accountId, amount);
 
         assertEquals(TransferResult.Status.SELF_TRANSFER, result.status());
+    }
+
+    @Test
+    void previewTransferDelegatesToService() {
+        UUID fromId = UUID.randomUUID();
+        UUID toId = UUID.randomUUID();
+        BigDecimal amount = new BigDecimal("5.00");
+        TransferPreviewResult preview = new TransferPreviewResult(
+                TransferPreviewResult.Status.ALLOWED,
+                amount,
+                new BigDecimal("4.50"),
+                new BigDecimal("0.50"),
+                0,
+                new BigDecimal("0.01"));
+
+        when(service.previewTransfer(fromId, toId, amount)).thenReturn(preview);
+
+        TransferPreviewResult result = api.previewTransfer(fromId, toId, amount);
+
+        assertTrue(result.isAllowed());
+        assertEquals(new BigDecimal("4.50"), result.received());
     }
 
     @Test
@@ -182,6 +234,28 @@ class SimpleEcoApiImplTest {
 
         Map<UUID, String> map = api.getUUIDNameMap();
         assertEquals("Alice", map.get(id));
+    }
+
+    @Test
+    void getRulesBuildsSnapshotFromServiceConfig() {
+        when(service.getCurrencyId()).thenReturn("simpleeco");
+        when(service.getCurrencySingular()).thenReturn("Coin");
+        when(service.getCurrencyPlural()).thenReturn("Coins");
+        when(service.getFractionalDigits()).thenReturn(2);
+        when(service.getStartingBalance()).thenReturn(new BigDecimal("5.00"));
+        when(service.getMaxBalance()).thenReturn(new BigDecimal("1000.00"));
+        when(service.getPayCooldownMs()).thenReturn(5000L);
+        when(service.getPayTaxRate()).thenReturn(new BigDecimal("2.50"));
+        when(service.getPayMinAmount()).thenReturn(new BigDecimal("0.10"));
+        when(service.getBalTopCacheTtlMs()).thenReturn(30000L);
+        when(service.getHistoryRetentionDays()).thenReturn(-1);
+
+        EconomyRulesSnapshot rules = api.getRules();
+
+        assertEquals("simpleeco", rules.currency().id());
+        assertEquals(5000L, rules.payCooldownMs());
+        assertEquals(new BigDecimal("2.50"), rules.payTaxRate());
+        assertTrue(rules.keepsHistoryForever());
     }
 
     @Test

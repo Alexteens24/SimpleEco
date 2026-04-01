@@ -91,7 +91,7 @@ history:
 
 Notes:
 
-- `-1` keeps all history.
+- Any value less than or equal to `0` keeps all history.
 - A positive value deletes older history rows in the background.
 - Deleting rows does not guarantee the SQLite file shrinks immediately.
 

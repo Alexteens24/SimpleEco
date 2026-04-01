@@ -16,6 +16,15 @@ public interface SimpleEcoApi {
 
     AccountOperationResult createAccount(UUID accountId, String name);
 
+    /**
+     * Ensures the account exists with the supplied name.
+     *
+     * <p>If the account does not exist yet, it is created. If it already exists
+     * with a different name, a rename is attempted. If it already exists with the
+     * same name, the result is {@link AccountOperationResult.Status#UNCHANGED}.</p>
+     */
+    AccountOperationResult ensureAccount(UUID accountId, String name);
+
     AccountOperationResult renameAccount(UUID accountId, String newName);
 
     AccountOperationResult deleteAccount(UUID accountId);
@@ -42,6 +51,15 @@ public interface SimpleEcoApi {
     BalanceChangeResult reset(UUID accountId);
 
     TransferResult transfer(UUID fromId, UUID toId, BigDecimal amount);
+
+    /**
+     * Returns a preview of what a transfer would do without mutating any state.
+     *
+     * <p>Unlike {@link #canTransfer(UUID, UUID, BigDecimal)}, this preview also
+     * evaluates pay cooldown and minimum pay amount and includes tax and received
+     * amount calculations. It does not account for cancellable plugin events.</p>
+     */
+    TransferPreviewResult previewTransfer(UUID fromId, UUID toId, BigDecimal amount);
 
     HistoryPage getHistory(UUID accountId, int page, int pageSize);
 
@@ -80,6 +98,9 @@ public interface SimpleEcoApi {
     void logCustomTransaction(UUID accountId, BigDecimal amount, TransactionKind kind);
 
     List<AccountSnapshot> getTopAccounts(int limit);
+
+    /** Returns the current configured operational rules exposed by the plugin. */
+    EconomyRulesSnapshot getRules();
 
     CurrencyInfo getCurrencyInfo();
 
