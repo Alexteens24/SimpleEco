@@ -1,10 +1,29 @@
 # SimpleEco Addon API
 
-Server owners can ignore this file unless another plugin integrates with SimpleEco directly.
+This document is for plugin developers integrating with SimpleEco directly.
 
-The API is for same-server integrations. It is not a cross-server sync layer.
+Server owners can ignore this file unless another plugin needs the SimpleEco service.
 
-## Setup
+## Scope
+
+SimpleEco exposes a plugin-native API for same-server integrations.
+
+What this API is good for:
+
+- account lookups
+- balance reads and writes
+- transfers
+- history reads
+- leaderboard reads
+- currency metadata
+
+What this API is not:
+
+- cross-server sync
+- an async-safe wrapper around the server thread model
+- a distributed ledger
+
+## Getting The Service
 
 Add SimpleEco as a dependency in `plugin.yml`:
 
@@ -24,11 +43,48 @@ if (registration == null) {
 SimpleEcoApi api = registration.getProvider();
 ```
 
-Call mutating methods from a safe server thread. The API does not move async addon calls onto the right thread for you.
+Resolve it during plugin startup and fail fast if it is missing.
 
-## Main Methods
+## Threading
 
-### Accounts
+Call mutating methods from a safe server thread.
+
+- On Paper: use the normal server thread.
+- On Folia: use the owning region thread for the player or entity you are acting on.
+
+The API does not move your work onto a safe thread for you.
+
+## Input Validation
+
+These validations are enforced before business-rule evaluation:
+
+- `accountId`, `fromId`, `toId`, `amount`, and required names must not be `null`
+- blank names are rejected
+- names longer than 16 characters are rejected
+- `has(UUID, BigDecimal)` requires `amount >= 0`
+- `logCustomTransaction(...)` requires `amount > 0`
+- history `page` and `pageSize` must be greater than 0
+- `HistoryFilter` requires `fromMs >= 0`, `toMs >= 0`, and `fromMs <= toMs`
+
+Invalid arguments raise standard Java exceptions such as `IllegalArgumentException` or `NullPointerException`.
+
+## Result Model
+
+SimpleEco uses result objects for normal business-rule failures.
+
+Examples:
+
+- insufficient funds
+- account not found
+- balance limit reached
+- transfer cooldown
+- plugin-cancelled event
+
+`SimpleEcoApiException` is reserved for API-level failures such as history read failures.
+
+## Accounts
+
+### Methods
 
 | Method | Result |
 |---|---|
@@ -39,9 +95,75 @@ Call mutating methods from a safe server thread. The API does not move async add
 | `renameAccount(UUID, String)` | `AccountOperationResult` |
 | `deleteAccount(UUID)` | `AccountOperationResult` |
 
-Account names are trimmed, non-blank, max 16 characters, and unique ignoring case.
+### Account Rules
 
-### Balances
+- names are trimmed before validation
+- names must be non-blank
+- names must be 16 characters or fewer
+- names are unique ignoring case
+
+### AccountSnapshot
+
+`AccountSnapshot` is immutable and contains:
+
+- `id`
+- `lastKnownName`
+- `balance`
+- `createdAt`
+- `updatedAt`
+
+### AccountOperationResult
+
+Fields:
+
+- `status`: outcome enum
+- `account`: snapshot when one is available
+- `message`: human-readable detail
+
+Success statuses:
+
+- `CREATED`
+- `RENAMED`
+- `DELETED`
+
+Non-success statuses:
+
+- `ALREADY_EXISTS`
+- `NAME_IN_USE`
+- `NOT_FOUND`
+- `UNCHANGED`
+- `FAILED`
+
+Notes:
+
+- `ALREADY_EXISTS` usually includes the current account snapshot.
+- `NAME_IN_USE` may include the current account snapshot on rename, but not on create.
+- `FAILED` means the API could not complete the operation cleanly even if the input itself was valid.
+
+### Example
+
+```java
+AccountOperationResult result = api.createAccount(playerId, playerName);
+if (result.isSuccess()) {
+    return;
+}
+
+switch (result.status()) {
+    case ALREADY_EXISTS, UNCHANGED -> {
+        return;
+    }
+    case NAME_IN_USE -> {
+        getLogger().warning("Name collision for " + playerName);
+    }
+    default -> {
+        throw new IllegalStateException(result.message());
+    }
+}
+```
+
+## Balances
+
+### Methods
 
 | Method | Result |
 |---|---|
@@ -54,13 +176,111 @@ Account names are trimmed, non-blank, max 16 characters, and unique ignoring cas
 | `setBalance(UUID, BigDecimal)` | `BalanceChangeResult` |
 | `reset(UUID)` | `BalanceChangeResult` |
 
-`has(UUID, BigDecimal)` requires a non-negative amount.
+### Semantics
 
-### Transfers
+- `getBalance(UUID)` returns `0` when the account does not exist
+- `has(UUID, BigDecimal)` is a convenience boolean and does not tell you why a check failed
+- `canDeposit(...)` and `canWithdraw(...)` tell you whether the operation would succeed without mutating state
+- `deposit(...)`, `withdraw(...)`, `setBalance(...)`, and `reset(...)` attempt the mutation and return a status object
 
-`transfer(UUID, UUID, BigDecimal)` returns `TransferResult`.
+### BalanceCheckResult
+
+Fields:
+
+- `status`
+- `amount`
+- `currentBalance`
+- `resultingBalance`
+
+`amount` is the validated request amount after the plugin applies its numeric rules.
 
 Possible statuses:
+
+- `ALLOWED`
+- `ACCOUNT_NOT_FOUND`
+- `INVALID_AMOUNT`
+- `INSUFFICIENT_FUNDS`
+- `BALANCE_LIMIT`
+
+### BalanceChangeResult
+
+Fields:
+
+- `status`
+- `amount`
+- `previousBalance`
+- `newBalance`
+
+Possible statuses:
+
+- `SUCCESS`
+- `ACCOUNT_NOT_FOUND`
+- `INVALID_AMOUNT`
+- `INSUFFICIENT_FUNDS`
+- `BALANCE_LIMIT`
+- `CANCELLED`
+
+`CANCELLED` means another plugin cancelled the Bukkit event fired for the mutation.
+
+### Example
+
+```java
+BalanceChangeResult result = api.withdraw(player.getUniqueId(), price);
+if (!result.isSuccess()) {
+    return false;
+}
+return true;
+```
+
+## Transfers
+
+### Methods
+
+| Method | Result |
+|---|---|
+| `canTransfer(UUID, UUID, BigDecimal)` | `TransferCheckResult` |
+| `transfer(UUID, UUID, BigDecimal)` | `TransferResult` |
+
+### Semantics
+
+`canTransfer(...)` checks only balance-level rules:
+
+- account existence
+- self-transfer
+- sender balance
+- recipient max balance
+
+It does not apply cooldown or tax.
+
+`transfer(...)` performs the full transfer path including cooldown, tax, and cancellable events.
+
+### TransferCheckResult
+
+Fields:
+
+- `status`
+- `amount`
+
+Statuses:
+
+- `ALLOWED`
+- `ACCOUNT_NOT_FOUND`
+- `INVALID_AMOUNT`
+- `INSUFFICIENT_FUNDS`
+- `BALANCE_LIMIT`
+- `SELF_TRANSFER`
+
+### TransferResult
+
+Fields:
+
+- `status`
+- `sent`
+- `received`
+- `tax`
+- `cooldownRemainingMs`
+
+Statuses:
 
 - `SUCCESS`
 - `COOLDOWN`
@@ -72,39 +292,184 @@ Possible statuses:
 - `INVALID_AMOUNT`
 - `SELF_TRANSFER`
 
-### History And Leaderboard
+Notes:
+
+- `sent` is what the sender loses
+- `received` is what the receiver gains
+- `tax` is the difference when tax is enabled
+- `cooldownRemainingMs` is only meaningful for `COOLDOWN`
+
+## History
+
+### Methods
 
 | Method | Result |
 |---|---|
 | `getHistory(UUID, int, int)` | `HistoryPage` |
 | `getHistory(UUID, int, int, HistoryFilter)` | `HistoryPage` |
-| `getTopAccounts(int)` | `List<AccountSnapshot>` |
-| `getRankOf(UUID)` | `int` |
 | `logCustomTransaction(UUID, BigDecimal, TransactionKind)` | `void` |
 
-`logCustomTransaction(...)` records a history entry without changing a balance. Its amount must be positive.
+### HistoryPage
 
-### Currency
+Fields:
 
-`getCurrencyInfo()` returns ID, display names, fractional digits, starting balance, and max balance.
+- `page`
+- `pageSize`
+- `totalEntries`
+- `totalPages`
+- `entries`
 
-`format(BigDecimal)` returns the plugin's formatted currency string.
+Notes:
 
-## Error Model
+- `entries` is immutable
+- `totalPages` is `0` when there are no matching entries
 
-- Normal business failures are returned as status objects.
-- `SimpleEcoApiException` is for API-level failures such as history lookup errors.
+### TransactionSnapshot
 
-## Events
+Each history entry contains:
 
-SimpleEco exposes Bukkit events for account create, rename, delete, balance changes, and payments.
+- `kind`
+- `counterpartId`
+- `targetId`
+- `amount`
+- `balanceBefore`
+- `balanceAfter`
+- `timestamp`
 
-## Example
+Kinds:
+
+- `GIVE`
+- `TAKE`
+- `SET`
+- `RESET`
+- `PAY_SENT`
+- `PAY_RECEIVED`
+
+### HistoryFilter
+
+`HistoryFilter.NONE` means no filtering.
+
+Builder fields:
+
+- `kind(TransactionKind)`
+- `fromMs(long)`
+- `toMs(long)`
+
+Example:
 
 ```java
-BalanceChangeResult result = api.withdraw(player.getUniqueId(), price);
-if (!result.isSuccess()) {
-    return false;
+HistoryFilter filter = HistoryFilter.builder()
+        .kind(TransactionKind.PAY_SENT)
+        .fromMs(startEpochMs)
+        .toMs(endEpochMs)
+        .build();
+
+HistoryPage page = api.getHistory(playerId, 1, 20, filter);
+```
+
+### logCustomTransaction(...)
+
+Use this when your addon wants to write a history entry without changing an account balance.
+
+Rules:
+
+- account must exist
+- amount must be positive
+- kind must not be `null`
+
+If the account does not exist, the API throws `SimpleEcoApiException`.
+
+## Leaderboard And Name Map
+
+### Methods
+
+| Method | Result |
+|---|---|
+| `getTopAccounts(int)` | `List<AccountSnapshot>` |
+| `getRankOf(UUID)` | `int` |
+| `getUUIDNameMap()` | `Map<UUID, String>` |
+
+Notes:
+
+- `getTopAccounts(limit)` returns immutable account snapshots ordered from richest to poorest
+- `limit` must be `>= 0`
+- `getRankOf(UUID)` returns a 1-based rank, or `-1` if the account does not exist
+- `getUUIDNameMap()` returns an unmodifiable snapshot of known UUID to last-known name mappings
+
+## Currency And Formatting
+
+### Methods
+
+| Method | Result |
+|---|---|
+| `getCurrencyInfo()` | `CurrencyInfo` |
+| `format(BigDecimal)` | `String` |
+
+### CurrencyInfo
+
+Fields:
+
+- `id`
+- `singularName`
+- `pluralName`
+- `fractionalDigits`
+- `startingBalance`
+- `maxBalance`
+
+Use `hasMaxBalance()` before reading `maxBalance` as a hard limit.
+
+## Exceptions
+
+You should expect three categories of failure:
+
+1. Invalid arguments.
+   These raise normal Java exceptions such as `IllegalArgumentException` or `NullPointerException`.
+2. Normal business-rule failures.
+   These are returned through result/status objects.
+3. API-level failures.
+   These raise `SimpleEcoApiException`.
+
+Examples of API-level failures:
+
+- history query failed
+- filtered history query failed
+- custom history write requested for a missing account
+
+## Bukkit Events
+
+SimpleEco also emits Bukkit events for integrations that prefer event listeners.
+
+Available events:
+
+- `AccountCreateEvent`
+- `AccountRenameEvent`
+- `AccountDeleteEvent`
+- `BalanceChangeEvent`
+- `PayEvent`
+
+`AccountRenameEvent`, `AccountDeleteEvent`, `BalanceChangeEvent`, and `PayEvent` are cancellable.
+
+## Practical Example
+
+```java
+public final class ShopBridge extends JavaPlugin {
+
+    private SimpleEcoApi api;
+
+    @Override
+    public void onEnable() {
+        RegisteredServiceProvider<SimpleEcoApi> registration = getServer()
+                .getServicesManager()
+                .getRegistration(SimpleEcoApi.class);
+        if (registration == null) {
+            throw new IllegalStateException("SimpleEco API is not available");
+        }
+        api = registration.getProvider();
+    }
+
+    public boolean charge(Player player, BigDecimal price) {
+        BalanceChangeResult result = api.withdraw(player.getUniqueId(), price);
+        return result.isSuccess();
+    }
 }
-return true;
 ```
