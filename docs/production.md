@@ -18,7 +18,9 @@ Use SimpleEco when you want a local economy for one Paper or Folia server.
 ## Before You Launch
 
 1. Install Java 21.
-2. Install Paper or Folia 1.21+.
+2. Install a supported server build.
+  Paper 1.20.5 is confirmed to boot this plugin.
+  Folia 1.21+ is the current safe baseline for the scheduler APIs used here.
 3. Install VaultUnlocked. Paper exposes it as plugin `Vault`.
 4. Start once so `plugins/SimpleEco/config.yml` is created.
 5. Review storage, autosave, pay, history retention, and messages.

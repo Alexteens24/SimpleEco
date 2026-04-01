@@ -4,6 +4,8 @@ This document is for plugin developers integrating with SimpleEco directly.
 
 Server owners can ignore this file unless another plugin needs the SimpleEco service.
 
+If you need the internal architecture, lifecycle, storage, or contributor workflow, read [Developer Guide](development.md) too.
+
 ## Scope
 
 SimpleEco exposes a plugin-native API for same-server integrations.

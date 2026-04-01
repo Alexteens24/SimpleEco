@@ -17,7 +17,8 @@ What it does not do:
 
 ## Requirements
 
-- Paper or Folia 1.21+
+- Paper 1.20.5+ is confirmed to load
+- Folia 1.21+ is the current safe baseline
 - [VaultUnlocked](https://github.com/TheNewEconomy/VaultUnlocked)
 - [PlaceholderAPI](https://placeholderapi.com/) if you want placeholders
 
@@ -59,6 +60,7 @@ VaultUnlocked is loaded by Paper as plugin `Vault`. SimpleEco depends on that ru
 ## Guides
 
 - [Production Guide](docs/production.md)
+- [Developer Guide](docs/development.md)
 - [Configuration](docs/configuration.md)
 - [Permissions](docs/permissions.md)
 - [PlaceholderAPI](docs/placeholders.md)
