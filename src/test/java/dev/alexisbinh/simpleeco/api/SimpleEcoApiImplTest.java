@@ -23,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -203,7 +204,9 @@ class SimpleEcoApiImplTest {
                 new BigDecimal("8.00"),
                 new BigDecimal("2.00"),
                 new BigDecimal("10.00"),
-                99L);
+                99L,
+                "QuestAddon",
+                "Boss clear reward");
 
         when(service.countTransactions(accountId)).thenReturn(11);
         when(service.getTransactions(accountId, 2, 5)).thenReturn(List.of(entry));
@@ -215,6 +218,8 @@ class SimpleEcoApiImplTest {
         assertEquals(11, page.totalEntries());
         assertEquals(3, page.totalPages());
         assertEquals(TransactionKind.PAY_RECEIVED, page.entries().getFirst().kind());
+        assertEquals("QuestAddon", page.entries().getFirst().source());
+        assertEquals("Boss clear reward", page.entries().getFirst().note());
     }
 
     @Test
@@ -330,6 +335,23 @@ class SimpleEcoApiImplTest {
         api.logCustomTransaction(accountId, new BigDecimal("10.00"), TransactionKind.GIVE);
 
         verify(service).logCustomTransaction(eq(accountId), any(TransactionEntry.class));
+    }
+
+    @Test
+    void logCustomTransactionWithMetadataWritesMetadataIntoEntry() {
+        UUID accountId = UUID.randomUUID();
+        AccountRecord account = new AccountRecord(accountId, "Alice", new BigDecimal("100.00"), 1L, 2L);
+        when(service.getAccount(accountId)).thenReturn(Optional.of(account));
+
+        api.logCustomTransaction(
+                accountId,
+                new BigDecimal("10.00"),
+                TransactionKind.GIVE,
+                new TransactionMetadata("QuestAddon", "Daily contract payout"));
+
+        verify(service).logCustomTransaction(eq(accountId), argThat(entry ->
+                "QuestAddon".equals(entry.getSource())
+                        && "Daily contract payout".equals(entry.getNote())));
     }
 
     @Test

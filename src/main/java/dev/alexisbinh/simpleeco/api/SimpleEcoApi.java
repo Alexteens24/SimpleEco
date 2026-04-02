@@ -97,6 +97,15 @@ public interface SimpleEcoApi {
      */
     void logCustomTransaction(UUID accountId, BigDecimal amount, TransactionKind kind);
 
+    /**
+     * Writes a custom history entry with addon-supplied metadata.
+     *
+     * <p>{@code metadata.source()} should usually identify the addon or feature
+     * that emitted the entry. {@code metadata.note()} can carry a short human-readable
+     * explanation such as a quest name or payout reason.</p>
+     */
+    void logCustomTransaction(UUID accountId, BigDecimal amount, TransactionKind kind, TransactionMetadata metadata);
+
     List<AccountSnapshot> getTopAccounts(int limit);
 
     /** Returns the current configured operational rules exposed by the plugin. */

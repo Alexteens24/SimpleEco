@@ -10,6 +10,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 public class JdbcAccountRepository implements AccountRepository {
@@ -51,9 +52,31 @@ public class JdbcAccountRepository implements AccountRepository {
                     ts             BIGINT        NOT NULL
                 )
                 """);
+            ensureColumn(stmt, "transactions", "source", "VARCHAR(64)");
+            ensureColumn(stmt, "transactions", "note", "VARCHAR(255)");
             stmt.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tx_target_ts ON transactions(target_id, ts DESC)"
             );
+        }
+    }
+
+    private void ensureColumn(Statement stmt, String tableName, String columnName, String definition) throws SQLException {
+        if (columnExists(tableName, columnName)) {
+            return;
+        }
+        stmt.execute("ALTER TABLE " + tableName + " ADD COLUMN " + columnName + " " + definition);
+    }
+
+    private boolean columnExists(String tableName, String columnName) throws SQLException {
+        DatabaseMetaData metaData = connection.getMetaData();
+        return hasColumn(metaData, tableName, columnName)
+                || hasColumn(metaData, tableName.toUpperCase(Locale.ROOT), columnName.toUpperCase(Locale.ROOT))
+                || hasColumn(metaData, tableName.toLowerCase(Locale.ROOT), columnName.toLowerCase(Locale.ROOT));
+    }
+
+    private static boolean hasColumn(DatabaseMetaData metaData, String tableName, String columnName) throws SQLException {
+        try (ResultSet rs = metaData.getColumns(null, null, tableName, columnName)) {
+            return rs.next();
         }
     }
 
@@ -132,8 +155,8 @@ public class JdbcAccountRepository implements AccountRepository {
     @Override
     public synchronized void insertTransaction(TransactionEntry entry) throws SQLException {
         try (PreparedStatement ps = connection.prepareStatement(
-                "INSERT INTO transactions(type,counterpart_id,target_id,amount,balance_before,balance_after,ts) "
-              + "VALUES(?,?,?,?,?,?,?)")) {
+                                "INSERT INTO transactions(type,counterpart_id,target_id,amount,balance_before,balance_after,ts,source,note) "
+                            + "VALUES(?,?,?,?,?,?,?,?,?)")) {
             ps.setString(1, entry.getType().name());
             if (entry.getCounterpartId() != null) {
                 ps.setString(2, entry.getCounterpartId().toString());
@@ -145,6 +168,16 @@ public class JdbcAccountRepository implements AccountRepository {
             ps.setBigDecimal(5, entry.getBalanceBefore());
             ps.setBigDecimal(6, entry.getBalanceAfter());
             ps.setLong(7, entry.getTimestamp());
+            if (entry.getSource() != null) {
+                ps.setString(8, entry.getSource());
+            } else {
+                ps.setNull(8, Types.VARCHAR);
+            }
+            if (entry.getNote() != null) {
+                ps.setString(9, entry.getNote());
+            } else {
+                ps.setNull(9, Types.VARCHAR);
+            }
             ps.executeUpdate();
         }
     }
@@ -154,7 +187,7 @@ public class JdbcAccountRepository implements AccountRepository {
             throws SQLException {
         List<TransactionEntry> result = new ArrayList<>();
         try (PreparedStatement ps = connection.prepareStatement(
-                "SELECT type,counterpart_id,target_id,amount,balance_before,balance_after,ts "
+            "SELECT type,counterpart_id,target_id,amount,balance_before,balance_after,ts,source,note "
               + "FROM transactions WHERE target_id=? ORDER BY ts DESC LIMIT ? OFFSET ?")) {
             ps.setString(1, targetId.toString());
             ps.setInt(2, limit);
@@ -182,7 +215,7 @@ public class JdbcAccountRepository implements AccountRepository {
     @Override
     public synchronized List<TransactionEntry> getTransactions(UUID targetId, int limit, int offset,
             @Nullable TransactionType type, long fromMs, long toMs) throws SQLException {
-        String sql = buildFilteredSql("SELECT type,counterpart_id,target_id,amount,balance_before,balance_after,ts "
+        String sql = buildFilteredSql("SELECT type,counterpart_id,target_id,amount,balance_before,balance_after,ts,source,note "
                 + "FROM transactions", targetId, type, fromMs, toMs)
                 + " ORDER BY ts DESC LIMIT ? OFFSET ?";
         List<TransactionEntry> result = new ArrayList<>();
@@ -240,7 +273,9 @@ public class JdbcAccountRepository implements AccountRepository {
         BigDecimal before = rs.getBigDecimal("balance_before");
         BigDecimal after = rs.getBigDecimal("balance_after");
         long ts = rs.getLong("ts");
-        return new TransactionEntry(type, counterpartId, tgtId, amount, before, after, ts);
+        String source = rs.getString("source");
+        String note = rs.getString("note");
+        return new TransactionEntry(type, counterpartId, tgtId, amount, before, after, ts, source, note);
     }
 
     @Override

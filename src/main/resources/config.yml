@@ -89,3 +89,4 @@ messages:
   history-reset: "<dark_gray>[<date>] <yellow>reset <gray>to <yellow><balance> <gray>(reset)"
   history-pay-sent: "<dark_gray>[<date>] <red>-<amount> <gray>(paid to <white><counterpart><gray>)"
   history-pay-received: "<dark_gray>[<date>] <green>+<amount> <gray>(from <white><counterpart><gray>)"
+  history-custom: "<dark_gray>[<date>] <aqua><kind> <yellow><amount> <gray>(<details>)"

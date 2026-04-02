@@ -19,6 +19,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -119,6 +120,20 @@ public class HistoryCommand implements CommandExecutor, TabCompleter {
     private Component formatEntry(TransactionEntry e, Map<UUID, String> nameMap) {
         String date = DATE_FORMAT.format(Instant.ofEpochMilli(e.getTimestamp()));
         String amount = service.format(e.getAmount());
+        String balance = service.format(e.getBalanceAfter());
+
+        if (e.hasMetadata()) {
+            return messages.getOrDefault("history-custom",
+                "<dark_gray>[<date>] <aqua><kind> <yellow><amount> <gray>(<details>)",
+                    Placeholder.unparsed("date", date),
+                    Placeholder.unparsed("kind", humanizeType(e)),
+                    Placeholder.unparsed("amount", signedAmount(e, amount)),
+                    Placeholder.unparsed("balance", balance),
+                    Placeholder.unparsed("source", e.getSource() != null ? e.getSource() : ""),
+                    Placeholder.unparsed("note", e.getNote() != null ? e.getNote() : ""),
+                    Placeholder.unparsed("details", customDetails(e)));
+        }
+
         String counterpart = e.getCounterpartId() != null
                 ? nameMap.getOrDefault(e.getCounterpartId(), e.getCounterpartId().toString())
                 : "Admin";
@@ -134,8 +149,34 @@ public class HistoryCommand implements CommandExecutor, TabCompleter {
         return messages.get(key,
                 Placeholder.unparsed("date", date),
                 Placeholder.unparsed("amount", amount),
-                Placeholder.unparsed("balance", service.format(e.getBalanceAfter())),
+                Placeholder.unparsed("balance", balance),
                 Placeholder.unparsed("counterpart", counterpart));
+    }
+
+    private static String signedAmount(TransactionEntry entry, String formattedAmount) {
+        return switch (entry.getType()) {
+            case GIVE, PAY_RECEIVED -> "+" + formattedAmount;
+            case TAKE, PAY_SENT -> "-" + formattedAmount;
+            case SET, RESET -> formattedAmount;
+        };
+    }
+
+    private static String customDetails(TransactionEntry entry) {
+        if (entry.getSource() != null && entry.getNote() != null) {
+            return entry.getSource() + ": " + entry.getNote();
+        }
+        if (entry.getSource() != null) {
+            return entry.getSource();
+        }
+        if (entry.getNote() != null) {
+            return entry.getNote();
+        }
+        return humanizeType(entry);
+    }
+
+    private static String humanizeType(TransactionEntry entry) {
+        String raw = entry.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        return Character.toUpperCase(raw.charAt(0)) + raw.substring(1);
     }
 
     @Override

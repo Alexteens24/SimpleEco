@@ -244,9 +244,15 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
 
     @Override
     public void logCustomTransaction(UUID accountId, BigDecimal amount, TransactionKind kind) {
+        logCustomTransaction(accountId, amount, kind, TransactionMetadata.empty());
+    }
+
+    @Override
+    public void logCustomTransaction(UUID accountId, BigDecimal amount, TransactionKind kind, TransactionMetadata metadata) {
         UUID validatedId = requireAccountId(accountId);
         BigDecimal validatedAmount = requirePositiveAmount(amount);
         Objects.requireNonNull(kind, "kind");
+        TransactionMetadata validatedMetadata = Objects.requireNonNull(metadata, "metadata");
 
         Optional<AccountSnapshot> accountOpt = getAccount(validatedId);
         if (accountOpt.isEmpty()) {
@@ -261,7 +267,9 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
                 validatedAmount,
                 currentBalance,
                 currentBalance,
-                System.currentTimeMillis());
+                System.currentTimeMillis(),
+                validatedMetadata.source(),
+                validatedMetadata.note());
         service.logCustomTransaction(validatedId, entry);
     }
 
@@ -352,7 +360,9 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
                 entry.getAmount(),
                 entry.getBalanceBefore(),
                 entry.getBalanceAfter(),
-                entry.getTimestamp());
+            entry.getTimestamp(),
+            entry.getSource(),
+            entry.getNote());
     }
 
     private static TransactionKind mapTransactionKind(TransactionType type) {

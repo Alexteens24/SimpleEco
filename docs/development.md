@@ -199,9 +199,11 @@ Main events:
 - `AccountRenameEvent`
 - `AccountDeleteEvent`
 - `BalanceChangeEvent`
+- `BalanceChangedEvent`
 - `PayEvent`
+- `PayCompletedEvent`
 
-If you add a new mutation path, decide whether an existing event should cover it or whether a new event type is justified.
+Use pre-events when you need veto points, and post-events when you need audit, webhook, or analytics hooks after a successful mutation.
 
 ## Build And Test Workflow
 

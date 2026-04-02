@@ -1,5 +1,7 @@
 package dev.alexisbinh.simpleeco.model;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -11,6 +13,7 @@ import java.util.UUID;
  *   <li>For PAY_SENT: {@code counterpartId} = recipient UUID.</li>
  *   <li>For PAY_RECEIVED: {@code counterpartId} = sender UUID.</li>
  *   <li>For GIVE/TAKE/SET/RESET: {@code counterpartId} is null (admin/API action).</li>
+ *   <li>{@code source} and {@code note} are optional addon metadata.</li>
  * </ul>
  */
 public final class TransactionEntry {
@@ -22,10 +25,19 @@ public final class TransactionEntry {
     private final BigDecimal balanceBefore;
     private final BigDecimal balanceAfter;
     private final long timestamp;
+    private final String source;
+    private final String note;
 
     public TransactionEntry(TransactionType type, UUID counterpartId, UUID targetId,
                             BigDecimal amount, BigDecimal balanceBefore,
                             BigDecimal balanceAfter, long timestamp) {
+        this(type, counterpartId, targetId, amount, balanceBefore, balanceAfter, timestamp, null, null);
+    }
+
+    public TransactionEntry(TransactionType type, UUID counterpartId, UUID targetId,
+                            BigDecimal amount, BigDecimal balanceBefore,
+                            BigDecimal balanceAfter, long timestamp,
+                            @Nullable String source, @Nullable String note) {
         this.type = type;
         this.counterpartId = counterpartId;
         this.targetId = targetId;
@@ -33,6 +45,8 @@ public final class TransactionEntry {
         this.balanceBefore = balanceBefore;
         this.balanceAfter = balanceAfter;
         this.timestamp = timestamp;
+        this.source = source;
+        this.note = note;
     }
 
     public TransactionType getType()          { return type; }
@@ -42,4 +56,7 @@ public final class TransactionEntry {
     public BigDecimal getBalanceBefore()      { return balanceBefore; }
     public BigDecimal getBalanceAfter()       { return balanceAfter; }
     public long getTimestamp()                { return timestamp; }
+    public String getSource()                 { return source; }
+    public String getNote()                   { return note; }
+    public boolean hasMetadata()              { return source != null || note != null; }
 }

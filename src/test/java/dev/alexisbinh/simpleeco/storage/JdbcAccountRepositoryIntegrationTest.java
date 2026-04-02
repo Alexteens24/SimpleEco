@@ -8,6 +8,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.math.BigDecimal;
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.Statement;
 import java.util.List;
 import java.util.UUID;
 
@@ -234,6 +237,83 @@ class JdbcAccountRepositoryIntegrationTest {
 
             int count = repository.countTransactions(accountId, null, 0, Long.MAX_VALUE);
             assertEquals(2, count);
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
+    void metadataRoundTripsThroughHistoryStorage() throws Exception {
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "metadata-roundtrip-test");
+        try {
+            UUID accountId = UUID.randomUUID();
+            repository.upsertBatch(List.of(new AccountRecord(accountId, "Helen", BigDecimal.ZERO, 1L, 1L)));
+            repository.insertTransaction(new TransactionEntry(
+                    TransactionType.GIVE,
+                    null,
+                    accountId,
+                    BigDecimal.ONE,
+                    BigDecimal.ZERO,
+                    BigDecimal.ONE,
+                    1_000L,
+                    "QuestAddon",
+                    "Daily reward"));
+
+            TransactionEntry stored = repository.getTransactions(accountId, 10, 0).getFirst();
+
+            assertEquals("QuestAddon", stored.getSource());
+            assertEquals("Daily reward", stored.getNote());
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
+    void existingTransactionsTableIsUpgradedWithMetadataColumns() throws Exception {
+        String filename = "legacy-metadata-schema-test";
+        try (Connection connection = DriverManager.getConnection(DatabaseDialect.H2.getJdbcUrl(tempDir.toString(), filename));
+             Statement stmt = connection.createStatement()) {
+            stmt.execute("""
+                CREATE TABLE accounts (
+                    id         VARCHAR(36)   NOT NULL PRIMARY KEY,
+                    name       VARCHAR(16)   NOT NULL,
+                    balance    DECIMAL(30,8) NOT NULL DEFAULT 0,
+                    created_at BIGINT        NOT NULL,
+                    updated_at BIGINT        NOT NULL
+                )
+                """);
+            stmt.execute("""
+                CREATE TABLE transactions (
+                    type           VARCHAR(16)   NOT NULL,
+                    counterpart_id VARCHAR(36),
+                    target_id      VARCHAR(36)   NOT NULL,
+                    amount         DECIMAL(30,8) NOT NULL,
+                    balance_before DECIMAL(30,8) NOT NULL,
+                    balance_after  DECIMAL(30,8) NOT NULL,
+                    ts             BIGINT        NOT NULL
+                )
+                """);
+        }
+
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), filename);
+        try {
+            UUID accountId = UUID.randomUUID();
+            repository.upsertBatch(List.of(new AccountRecord(accountId, "Iris", BigDecimal.ZERO, 1L, 1L)));
+            repository.insertTransaction(new TransactionEntry(
+                    TransactionType.GIVE,
+                    null,
+                    accountId,
+                    BigDecimal.ONE,
+                    BigDecimal.ZERO,
+                    BigDecimal.ONE,
+                    2_000L,
+                    "QuestAddon",
+                    "Migrated schema still stores metadata"));
+
+            TransactionEntry stored = repository.getTransactions(accountId, 10, 0).getFirst();
+
+            assertEquals("QuestAddon", stored.getSource());
+            assertEquals("Migrated schema still stores metadata", stored.getNote());
         } finally {
             repository.close();
         }

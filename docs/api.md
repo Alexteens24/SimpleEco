@@ -63,6 +63,8 @@ These validations are enforced before business-rule evaluation:
 - `accountId`, `fromId`, `toId`, `amount`, and required names must not be `null`
 - blank names are rejected
 - names longer than 16 characters are rejected
+- `TransactionMetadata.source` must be 64 characters or fewer when provided
+- `TransactionMetadata.note` must be 255 characters or fewer when provided
 - `has(UUID, BigDecimal)` requires `amount >= 0`
 - `logCustomTransaction(...)` requires `amount > 0`
 - history `page` and `pageSize` must be greater than 0
@@ -366,6 +368,7 @@ Notes:
 | `getHistory(UUID, int, int)` | `HistoryPage` |
 | `getHistory(UUID, int, int, HistoryFilter)` | `HistoryPage` |
 | `logCustomTransaction(UUID, BigDecimal, TransactionKind)` | `void` |
+| `logCustomTransaction(UUID, BigDecimal, TransactionKind, TransactionMetadata)` | `void` |
 
 ### HistoryPage
 
@@ -393,6 +396,8 @@ Each history entry contains:
 - `balanceBefore`
 - `balanceAfter`
 - `timestamp`
+- `source`
+- `note`
 
 Kinds:
 
@@ -436,6 +441,31 @@ Rules:
 - kind must not be `null`
 
 If the account does not exist, the API throws `SimpleEcoApiException`.
+
+### TransactionMetadata
+
+Fields:
+
+- `source`
+- `note`
+
+Notes:
+
+- `source` should usually identify the addon or feature that emitted the entry
+- `note` is a short human-readable explanation such as a quest name or payout reason
+- blank metadata fields are normalized to `null`
+
+Example:
+
+```java
+api.logCustomTransaction(
+    playerId,
+    new BigDecimal("25.00"),
+    TransactionKind.GIVE,
+    new TransactionMetadata("QuestAddon", "Daily contract payout"));
+```
+
+When metadata is present, SimpleEco can render that history line as a custom entry instead of the built-in admin wording.
 
 ## Leaderboard And Name Map
 
@@ -521,9 +551,38 @@ Available events:
 - `AccountRenameEvent`
 - `AccountDeleteEvent`
 - `BalanceChangeEvent`
+- `BalanceChangedEvent`
+- `PayEvent`
+- `PayCompletedEvent`
+
+Pre-mutation events:
+
+- `AccountRenameEvent`
+- `AccountDeleteEvent`
+- `BalanceChangeEvent`
 - `PayEvent`
 
-`AccountRenameEvent`, `AccountDeleteEvent`, `BalanceChangeEvent`, and `PayEvent` are cancellable.
+These are cancellable.
+
+Post-success events:
+
+- `AccountCreateEvent`
+- `BalanceChangedEvent`
+- `PayCompletedEvent`
+
+These are not cancellable and fire only after the in-memory mutation succeeded.
+
+## Event Listener Example
+
+```java
+@EventHandler
+public void onPayCompleted(PayCompletedEvent event) {
+    getLogger().info(
+        event.getFromId() + " sent " + event.getSent()
+            + " to " + event.getToId()
+            + " (receiver got " + event.getReceived() + ")");
+}
+```
 
 ## Practical Example
 
@@ -544,8 +603,22 @@ public final class ShopBridge extends JavaPlugin {
     }
 
     public boolean charge(Player player, BigDecimal price) {
-        BalanceChangeResult result = api.withdraw(player.getUniqueId(), price);
-        return result.isSuccess();
+        TransferPreviewResult preview = api.previewTransfer(player.getUniqueId(), bankId, price);
+        if (!preview.isAllowed()) {
+            return false;
+        }
+
+        TransferResult result = api.transfer(player.getUniqueId(), bankId, price);
+        if (!result.isSuccess()) {
+            return false;
+        }
+
+        api.logCustomTransaction(
+                player.getUniqueId(),
+                price,
+                TransactionKind.TAKE,
+                new TransactionMetadata("ShopBridge", "Purchased item from server shop"));
+        return true;
     }
 }
 ```

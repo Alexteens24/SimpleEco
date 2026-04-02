@@ -126,3 +126,4 @@ Common placeholders:
 | `history-header` | `<player>`, `<page>`, `<total>` |
 | `history-pay-sent` | `<date>`, `<amount>`, `<counterpart>` |
 | `history-pay-received` | `<date>`, `<amount>`, `<counterpart>` |
+| `history-custom` | `<date>`, `<kind>`, `<amount>`, `<details>`, `<source>`, `<note>`, `<balance>` |

@@ -2,13 +2,16 @@ package dev.alexisbinh.simpleeco.service;
 
 import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.event.BalanceChangeEvent;
+import dev.alexisbinh.simpleeco.event.BalanceChangedEvent;
 import dev.alexisbinh.simpleeco.event.PayEvent;
+import dev.alexisbinh.simpleeco.event.PayCompletedEvent;
 import dev.alexisbinh.simpleeco.model.AccountRecord;
 import dev.alexisbinh.simpleeco.model.PayResult;
 import dev.alexisbinh.simpleeco.model.TransactionEntry;
 import dev.alexisbinh.simpleeco.model.TransactionType;
 import net.milkbowl.vault2.economy.EconomyResponse;
 import org.bukkit.configuration.file.YamlConfiguration;
+import org.bukkit.event.Event;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -17,6 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -25,6 +29,7 @@ class EconomyOperationsTest {
     private AccountRegistry registry;
     private EconomyConfigSnapshot config;
     private List<TransactionEntry> logged;
+    private List<Event> dispatchedEvents;
     private int leaderboardInvalidations;
     private EconomyOperations ops;
 
@@ -35,6 +40,7 @@ class EconomyOperationsTest {
     void setUp() {
         registry = new AccountRegistry();
         logged = new ArrayList<>();
+        dispatchedEvents = new ArrayList<>();
         leaderboardInvalidations = 0;
 
         aliceId = UUID.randomUUID();
@@ -59,6 +65,8 @@ class EconomyOperationsTest {
         assertEquals(TransactionType.GIVE, logged.getFirst().getType());
         assertEquals(0, new BigDecimal("3.50").compareTo(logged.getFirst().getAmount()));
         assertEquals(1, leaderboardInvalidations);
+        assertEquals(List.of(BalanceChangeEvent.class, BalanceChangedEvent.class),
+            dispatchedEvents.stream().map(Event::getClass).toList());
     }
 
     @Test
@@ -73,6 +81,7 @@ class EconomyOperationsTest {
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
         assertTrue(logged.isEmpty());
         assertEquals(0, leaderboardInvalidations);
+        assertEquals(List.of(BalanceChangeEvent.class), dispatchedEvents.stream().map(Event::getClass).toList());
     }
 
     @Test
@@ -232,6 +241,8 @@ class EconomyOperationsTest {
         assertEquals(2, logged.size());
         assertTrue(logged.stream().anyMatch(e -> e.getType() == TransactionType.PAY_SENT));
         assertTrue(logged.stream().anyMatch(e -> e.getType() == TransactionType.PAY_RECEIVED));
+        assertEquals(List.of(PayEvent.class, PayCompletedEvent.class),
+            dispatchedEvents.stream().map(Event::getClass).toList());
     }
 
     @Test
@@ -261,6 +272,7 @@ class EconomyOperationsTest {
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
         assertEquals(0, new BigDecimal("5.00").compareTo(registry.getLiveRecord(bobId).getBalance()));
         assertTrue(logged.isEmpty());
+        assertEquals(List.of(PayEvent.class), dispatchedEvents.stream().map(Event::getClass).toList());
     }
 
     @Test
@@ -425,9 +437,12 @@ class EconomyOperationsTest {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private EconomyOperations buildOps(EventDispatcher dispatcher) {
+    private EconomyOperations buildOps(Consumer<Event> listener) {
         return new EconomyOperations(registry, () -> config, new ConcurrentHashMap<>(),
-                logged::add, () -> leaderboardInvalidations++, dispatcher);
+                logged::add, () -> leaderboardInvalidations++, event -> {
+                    dispatchedEvents.add(event);
+                    listener.accept(event);
+                });
     }
 
     private static EconomyConfigSnapshot configWith(double taxPercent, long cooldownSec,

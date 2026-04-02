@@ -3,7 +3,9 @@ package dev.alexisbinh.simpleeco.service;
 import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.api.TransferCheckResult;
 import dev.alexisbinh.simpleeco.event.BalanceChangeEvent;
+import dev.alexisbinh.simpleeco.event.BalanceChangedEvent;
 import dev.alexisbinh.simpleeco.event.PayEvent;
+import dev.alexisbinh.simpleeco.event.PayCompletedEvent;
 import dev.alexisbinh.simpleeco.model.AccountRecord;
 import dev.alexisbinh.simpleeco.model.PayResult;
 import dev.alexisbinh.simpleeco.model.TransactionEntry;
@@ -124,6 +126,7 @@ final class EconomyOperations {
             leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(TransactionType.GIVE, null, id, scaled, before, newBalance,
                     System.currentTimeMillis()));
+            eventDispatcher.dispatch(new BalanceChangedEvent(id, before, newBalance, BalanceChangeEvent.Reason.GIVE));
             return success(scaled, newBalance);
         }
     }
@@ -160,6 +163,7 @@ final class EconomyOperations {
             leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(TransactionType.TAKE, null, id, scaled, before, newBalance,
                     System.currentTimeMillis()));
+            eventDispatcher.dispatch(new BalanceChangedEvent(id, before, newBalance, BalanceChangeEvent.Reason.TAKE));
             return success(scaled, newBalance);
         }
     }
@@ -196,6 +200,7 @@ final class EconomyOperations {
             leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(TransactionType.SET, null, id, scaled, before, scaled,
                     System.currentTimeMillis()));
+            eventDispatcher.dispatch(new BalanceChangedEvent(id, before, scaled, BalanceChangeEvent.Reason.SET));
             return success(scaled, scaled);
         }
     }
@@ -224,6 +229,7 @@ final class EconomyOperations {
             leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(TransactionType.RESET, null, id, startingBalance, before,
                     startingBalance, System.currentTimeMillis()));
+            eventDispatcher.dispatch(new BalanceChangedEvent(id, before, startingBalance, BalanceChangeEvent.Reason.RESET));
             return success(startingBalance, startingBalance);
         }
     }
@@ -454,6 +460,16 @@ final class EconomyOperations {
                 long now = System.currentTimeMillis();
                 transactionLogger.accept(new TransactionEntry(TransactionType.PAY_SENT, toId, fromId, scaled, fromBefore, fromAfter, now));
                 transactionLogger.accept(new TransactionEntry(TransactionType.PAY_RECEIVED, fromId, toId, received, toBefore, toAfter, now));
+                eventDispatcher.dispatch(new PayCompletedEvent(
+                        fromId,
+                        toId,
+                        scaled,
+                        received,
+                        tax,
+                        fromBefore,
+                        fromAfter,
+                        toBefore,
+                        toAfter));
                 return PayResult.success(scaled, received, tax);
             }
         }

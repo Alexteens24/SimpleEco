@@ -25,7 +25,14 @@ public final class Messages {
     }
 
     public Component get(String key, TagResolver... resolvers) {
+        return getOrDefault(key, "<red>(missing message: " + key + ")", resolvers);
+    }
+
+    public Component getOrDefault(String key, String defaultRaw, TagResolver... resolvers) {
         String raw = config.getString("messages." + key, "<red>(missing message: " + key + ")");
+        if (raw == null) {
+            raw = defaultRaw;
+        }
         return MM.deserialize(raw, resolvers);
     }
 }
