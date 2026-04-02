@@ -16,6 +16,7 @@ Hot path callers include:
 Balance reads and writes do not need a database round trip. Dirty account snapshots are flushed on the autosave interval and on normal shutdown.
 
 Transaction history is written on a dedicated single-thread executor.
+Before a dirty balance batch is persisted, SimpleEco waits for older queued history writes so persisted balances do not outrun their recorded audit trail.
 
 ## Storage
 
@@ -35,7 +36,7 @@ Transaction history is written on a dedicated single-thread executor.
 
 - Recent balance changes can be lost after an unclean stop because balances are flushed on a schedule.
 - The loss window is at most one `autosave-interval` under normal conditions.
-- Normal shutdown flushes balances and waits for queued history writes.
+- Normal shutdown drains queued history writes, then performs a final balance flush.
 
 ## Scaling Notes
 

@@ -48,15 +48,8 @@ public class SimpleEcoLegacyEconomyProvider implements Economy {
     // ── Account queries ───────────────────────────────────────────────────────
 
     private Optional<UUID> accountIdOf(String playerName) {
-        Optional<UUID> resolvedByName = service.findByName(playerName)
-                .map(dev.alexisbinh.simpleeco.model.AccountRecord::getId);
-        if (resolvedByName.isPresent()) {
-            return resolvedByName;
-        }
-
-        return knownPlayerLookup.apply(playerName)
-                .map(OfflinePlayer::getUniqueId)
-                .filter(service::hasAccount);
+        return service.findByName(playerName)
+            .map(dev.alexisbinh.simpleeco.model.AccountRecord::getId);
     }
 
     private static Optional<OfflinePlayer> lookupKnownPlayer(String playerName) {

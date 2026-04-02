@@ -295,9 +295,15 @@ public class AccountService {
         if (amount.compareTo(BigDecimal.ZERO) < 0) {
             return false;
         }
+
+        BigDecimal scaled = amount.setScale(config.fractionalDigits(), RoundingMode.HALF_UP);
+        if (amount.compareTo(BigDecimal.ZERO) > 0 && scaled.compareTo(BigDecimal.ZERO) <= 0) {
+            return false;
+        }
+
         AccountRecord record = accountRegistry.getLiveRecord(id);
         if (record == null) return false;
-        return record.getBalance().compareTo(amount) >= 0;
+        return record.getBalance().compareTo(scaled) >= 0;
     }
 
     public EconomyResponse canDeposit(UUID id, BigDecimal amount) {
@@ -438,6 +444,16 @@ public class AccountService {
                 snapshots.add(snap);
             }
             if (snapshots.isEmpty()) return;
+
+            if (!transactionHistoryService.waitForDrain()) {
+                log.warning("Skipping balance flush because pending transaction writes did not drain in time.");
+                for (AccountRecord snap : snapshots) {
+                    AccountRecord live = accountRegistry.getLiveRecord(snap.getId());
+                    if (live != null) live.markDirty();
+                }
+                return;
+            }
+
             try {
                 repository.upsertBatch(snapshots);
             } catch (SQLException e) {
@@ -452,8 +468,8 @@ public class AccountService {
     }
 
     public void shutdown() {
-        flushDirty();
         transactionHistoryService.shutdown();
+        flushDirty();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

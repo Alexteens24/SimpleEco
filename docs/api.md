@@ -198,6 +198,7 @@ switch (result.status()) {
 
 - `getBalance(UUID)` returns `0` when the account does not exist
 - `has(UUID, BigDecimal)` is a convenience boolean and does not tell you why a check failed
+- `has(UUID, BigDecimal)` applies the configured currency precision before comparing balances; positive probe amounts that round to `0` return `false`
 - `canDeposit(...)` and `canWithdraw(...)` tell you whether the operation would succeed without mutating state
 - `deposit(...)`, `withdraw(...)`, `setBalance(...)`, and `reset(...)` attempt the mutation and return a status object
 

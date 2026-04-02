@@ -349,6 +349,8 @@ class EconomyOperationsTest {
         PayResult result = ops.pay(aliceId, bobId, new BigDecimal("0.05"));
 
         assertEquals(PayResult.Status.TOO_LOW, result.getStatus());
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.getSent()));
+        assertEquals(0, new BigDecimal("0.10").compareTo(result.getMinimumAmount()));
         assertTrue(logged.isEmpty());
     }
 

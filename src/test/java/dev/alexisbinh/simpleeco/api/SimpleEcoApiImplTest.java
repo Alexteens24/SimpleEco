@@ -138,6 +138,22 @@ class SimpleEcoApiImplTest {
     }
 
     @Test
+    void transferTooLowDoesNotLeakMinimumIntoSentAmount() {
+        UUID fromId = UUID.randomUUID();
+        UUID toId = UUID.randomUUID();
+        BigDecimal amount = new BigDecimal("0.05");
+
+        when(service.pay(fromId, toId, amount)).thenReturn(PayResult.tooLow(new BigDecimal("0.10")));
+
+        TransferResult result = api.transfer(fromId, toId, amount);
+
+        assertEquals(TransferResult.Status.TOO_LOW, result.status());
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.sent()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.received()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.tax()));
+    }
+
+    @Test
     void previewTransferDelegatesToService() {
         UUID fromId = UUID.randomUUID();
         UUID toId = UUID.randomUUID();

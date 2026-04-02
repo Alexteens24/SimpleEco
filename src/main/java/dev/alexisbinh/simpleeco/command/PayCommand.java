@@ -71,7 +71,7 @@ public class PayCommand implements CommandExecutor, TabCompleter {
             case SELF_TRANSFER      -> messages.send(payer, "self-pay");
             case INSUFFICIENT_FUNDS -> messages.send(payer, "insufficient-funds");
             case TOO_LOW            -> messages.send(payer, "pay-too-low",
-                    Placeholder.unparsed("min", service.format(result.getSent())));
+                Placeholder.unparsed("min", service.format(result.getMinimumAmount())));
             case CANCELLED          -> messages.send(payer, "pay-cancelled");
             case BALANCE_LIMIT      -> messages.send(payer, "pay-balance-limit",
                     Placeholder.unparsed("player", target.getLastKnownName()));

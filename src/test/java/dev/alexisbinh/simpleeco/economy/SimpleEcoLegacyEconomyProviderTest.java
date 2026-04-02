@@ -91,6 +91,19 @@ class SimpleEcoLegacyEconomyProviderTest {
     }
 
     @Test
+    void depositByNameDoesNotFallbackToKnownPlayerLookupWhenNameIsMissing() {
+        provider = new SimpleEcoLegacyEconomyProvider(service, name -> Optional.of(player));
+
+        when(service.findByName("Alice")).thenReturn(Optional.empty());
+
+        EconomyResponse result = provider.depositPlayer("Alice", 5.0);
+
+        assertEquals(EconomyResponse.ResponseType.FAILURE, result.type);
+        assertEquals("Account not found", result.errorMessage);
+        verify(service, never()).deposit(any(UUID.class), any(BigDecimal.class));
+    }
+
+    @Test
     void createPlayerAccountByNameUsesKnownPlayerWhenAvailable() {
         UUID playerId = UUID.randomUUID();
 

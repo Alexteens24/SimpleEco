@@ -60,6 +60,7 @@ SimpleEco is an in-memory economy with local persistence.
 - Normal reads and writes do not round-trip to the database.
 - Dirty account rows are flushed in batches on the autosave interval and on clean shutdown.
 - Transaction history is written through a dedicated single-thread executor.
+- Before a dirty balance batch is persisted, older queued history writes are drained so the persisted balance snapshot does not outrun its audit trail.
 - Baltop is cached with a TTL and stored as frozen account snapshots.
 
 This design optimizes same-server latency and keeps storage logic simple, but it is not a shared-database or multi-JVM design.
@@ -156,6 +157,7 @@ These rules are relied on across commands, Vault bridges, and the public API.
 - deposit, withdraw, and pay amounts that round to `0` at the configured decimal scale are invalid
 - set accepts zero and positive amounts, but not negative amounts
 - `has(...)` rejects negative probe amounts
+- `has(...)` compares against the configured decimal scale; positive probe amounts that round to `0` fail the probe
 - self-transfer is invalid
 - max balance is enforced on deposit and on the receiving side of pay
 

@@ -4,6 +4,7 @@ import dev.alexisbinh.simpleeco.model.AccountRecord;
 import dev.alexisbinh.simpleeco.model.PayResult;
 import dev.alexisbinh.simpleeco.model.TransactionEntry;
 import dev.alexisbinh.simpleeco.model.TransactionType;
+import dev.alexisbinh.simpleeco.storage.AccountRepository;
 import dev.alexisbinh.simpleeco.storage.DatabaseDialect;
 import dev.alexisbinh.simpleeco.storage.JdbcAccountRepository;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -11,9 +12,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.math.BigDecimal;
+import java.sql.SQLException;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -127,6 +137,25 @@ class AccountServicePersistenceIntegrationTest {
     }
 
     @Test
+    void hasUsesConfiguredCurrencyScaleForPositiveProbeAmounts() throws Exception {
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "scaled-has-test");
+        try {
+            AccountService service = newService(repository);
+            UUID accountId = UUID.randomUUID();
+
+            assertTrue(service.createAccount(accountId, "Alice"));
+            assertTrue(service.deposit(accountId, BigDecimal.ONE).transactionSuccess());
+
+            assertTrue(service.has(accountId, new BigDecimal("1.001")));
+            assertFalse(service.has(accountId, new BigDecimal("0.001")));
+
+            service.shutdown();
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
     void loadAllFailsWhenStoredNamesCollideIgnoringCase() throws Exception {
         JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "load-collision-test");
         try {
@@ -168,6 +197,40 @@ class AccountServicePersistenceIntegrationTest {
             reader.shutdown();
         } finally {
             repository.close();
+        }
+    }
+
+    @Test
+    void flushDirtyWaitsForQueuedHistoryWritesBeforePersistingBalanceBatch() throws Exception {
+        BlockingRepository repository = new BlockingRepository();
+        AccountService service = newService(repository);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        try {
+            UUID accountId = UUID.randomUUID();
+
+            assertTrue(service.createAccount(accountId, "Alice"));
+            assertTrue(service.deposit(accountId, new BigDecimal("3.00")).transactionSuccess());
+            assertTrue(repository.transactionInsertStarted.await(2, TimeUnit.SECONDS));
+
+            Future<?> flushFuture = executor.submit(service::flushDirty);
+
+            assertFalse(repository.upsertStarted.await(200, TimeUnit.MILLISECONDS));
+
+            repository.allowTransactionInsert.countDown();
+            flushFuture.get(2, TimeUnit.SECONDS);
+
+            assertTrue(repository.upsertStarted.await(1, TimeUnit.SECONDS));
+            assertEquals(1, repository.upsertCalls);
+            assertEquals(1, repository.countTransactions(accountId));
+            assertEquals(1, repository.lastUpsertedRecords.size());
+            assertEquals(0, new BigDecimal("8.00").compareTo(repository.lastUpsertedRecords.getFirst().getBalance()));
+
+            service.shutdown();
+        } finally {
+            repository.allowTransactionInsert.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
         }
     }
 
@@ -322,7 +385,7 @@ class AccountServicePersistenceIntegrationTest {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
-    private static AccountService newService(JdbcAccountRepository repository) {
+    private static AccountService newService(AccountRepository repository) {
         return new AccountService(
                 repository,
                 Logger.getLogger("simpleeco-test"),
@@ -330,6 +393,10 @@ class AccountServicePersistenceIntegrationTest {
                 testConfig(0.0, -1),
                 event -> { }
         );
+    }
+
+    private static AccountService newService(JdbcAccountRepository repository) {
+        return newService((AccountRepository) repository);
     }
 
     private static AccountService newServiceWithTax(JdbcAccountRepository repository, double taxPercent) {
@@ -366,5 +433,94 @@ class AccountServicePersistenceIntegrationTest {
         config.set("baltop.cache-ttl-seconds", 30);
         config.set("history.retention-days", retentionDays);
         return config;
+    }
+
+    private static final class BlockingRepository implements AccountRepository {
+
+        private final CountDownLatch transactionInsertStarted = new CountDownLatch(1);
+        private final CountDownLatch allowTransactionInsert = new CountDownLatch(1);
+        private final CountDownLatch upsertStarted = new CountDownLatch(1);
+        private final List<TransactionEntry> transactions = new ArrayList<>();
+        private List<AccountRecord> lastUpsertedRecords = List.of();
+        private int upsertCalls;
+
+        @Override
+        public synchronized List<AccountRecord> loadAll() {
+            return new ArrayList<>(lastUpsertedRecords);
+        }
+
+        @Override
+        public synchronized void upsertBatch(Collection<AccountRecord> records) {
+            lastUpsertedRecords = records.stream()
+                    .map(AccountRecord::snapshot)
+                    .toList();
+            upsertCalls++;
+            upsertStarted.countDown();
+        }
+
+        @Override
+        public void delete(UUID accountId) {
+            // No-op for this test repository.
+        }
+
+        @Override
+        public void close() {
+            // No-op for this test repository.
+        }
+
+        @Override
+        public synchronized void insertTransaction(TransactionEntry entry) throws SQLException {
+            transactionInsertStarted.countDown();
+            try {
+                if (!allowTransactionInsert.await(5, TimeUnit.SECONDS)) {
+                    throw new SQLException("Timed out waiting to insert transaction");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new SQLException("Interrupted while waiting to insert transaction", e);
+            }
+            transactions.add(entry);
+        }
+
+        @Override
+        public synchronized List<TransactionEntry> getTransactions(UUID targetId, int limit, int offset) {
+            return filterTransactions(targetId, null, 0, Long.MAX_VALUE, limit, offset);
+        }
+
+        @Override
+        public synchronized List<TransactionEntry> getTransactions(UUID targetId, int limit, int offset,
+                TransactionType type, long fromMs, long toMs) {
+            return filterTransactions(targetId, type, fromMs, toMs, limit, offset);
+        }
+
+        @Override
+        public synchronized int countTransactions(UUID targetId) {
+            return filterTransactions(targetId, null, 0, Long.MAX_VALUE, Integer.MAX_VALUE, 0).size();
+        }
+
+        @Override
+        public synchronized int countTransactions(UUID targetId, TransactionType type, long fromMs, long toMs) {
+            return filterTransactions(targetId, type, fromMs, toMs, Integer.MAX_VALUE, 0).size();
+        }
+
+        @Override
+        public synchronized int pruneTransactions(long cutoffMs) {
+            int before = transactions.size();
+            transactions.removeIf(entry -> entry.getTimestamp() < cutoffMs);
+            return before - transactions.size();
+        }
+
+        private List<TransactionEntry> filterTransactions(UUID targetId, TransactionType type,
+                long fromMs, long toMs, int limit, int offset) {
+            return transactions.stream()
+                    .filter(entry -> entry.getTargetId().equals(targetId))
+                    .filter(entry -> type == null || entry.getType() == type)
+                    .filter(entry -> entry.getTimestamp() >= fromMs)
+                    .filter(entry -> entry.getTimestamp() <= toMs)
+                    .sorted(Comparator.comparingLong(TransactionEntry::getTimestamp).reversed())
+                    .skip(offset)
+                    .limit(limit)
+                    .toList();
+        }
     }
 }
