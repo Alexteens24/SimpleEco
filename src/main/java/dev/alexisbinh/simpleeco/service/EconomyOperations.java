@@ -1,5 +1,6 @@
 package dev.alexisbinh.simpleeco.service;
 
+import dev.alexisbinh.simpleeco.api.BalanceCheckResult;
 import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.api.TransferCheckResult;
 import dev.alexisbinh.simpleeco.event.BalanceChangeEvent;
@@ -42,54 +43,54 @@ final class EconomyOperations {
         this.eventDispatcher = eventDispatcher;
     }
 
-    EconomyResponse canDeposit(UUID id, BigDecimal amount) {
+    BalanceCheckResult canDeposit(UUID id, BigDecimal amount) {
         EconomyConfigSnapshot currentConfig = configSupplier.get();
         BigDecimal scaled = scale(amount, currentConfig);
         if (scaled.compareTo(BigDecimal.ZERO) <= 0) {
-            return failure(scaled, BigDecimal.ZERO, "Amount must be positive");
+            return new BalanceCheckResult(BalanceCheckResult.Status.INVALID_AMOUNT, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
         AccountRecord record = accountRegistry.getLiveRecord(id);
         if (record == null) {
-            return failure(scaled, BigDecimal.ZERO, "Account not found");
+            return new BalanceCheckResult(BalanceCheckResult.Status.ACCOUNT_NOT_FOUND, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
         synchronized (record) {
             if (!accountRegistry.isLive(id, record)) {
-                return failure(scaled, BigDecimal.ZERO, "Account not found");
+                return new BalanceCheckResult(BalanceCheckResult.Status.ACCOUNT_NOT_FOUND, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
             }
 
             BigDecimal before = record.getBalance();
             BigDecimal newBalance = before.add(scaled);
             if (currentConfig.maxBalance() != null && newBalance.compareTo(currentConfig.maxBalance()) > 0) {
-                return failure(scaled, before, "Balance limit reached");
+                return new BalanceCheckResult(BalanceCheckResult.Status.BALANCE_LIMIT, scaled, before, before);
             }
-            return success(scaled, newBalance);
+            return new BalanceCheckResult(BalanceCheckResult.Status.ALLOWED, scaled, before, newBalance);
         }
     }
 
-    EconomyResponse canWithdraw(UUID id, BigDecimal amount) {
+    BalanceCheckResult canWithdraw(UUID id, BigDecimal amount) {
         EconomyConfigSnapshot currentConfig = configSupplier.get();
         BigDecimal scaled = scale(amount, currentConfig);
         if (scaled.compareTo(BigDecimal.ZERO) <= 0) {
-            return failure(scaled, BigDecimal.ZERO, "Amount must be positive");
+            return new BalanceCheckResult(BalanceCheckResult.Status.INVALID_AMOUNT, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
         AccountRecord record = accountRegistry.getLiveRecord(id);
         if (record == null) {
-            return failure(scaled, BigDecimal.ZERO, "Account not found");
+            return new BalanceCheckResult(BalanceCheckResult.Status.ACCOUNT_NOT_FOUND, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
         }
 
         synchronized (record) {
             if (!accountRegistry.isLive(id, record)) {
-                return failure(scaled, BigDecimal.ZERO, "Account not found");
+                return new BalanceCheckResult(BalanceCheckResult.Status.ACCOUNT_NOT_FOUND, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
             }
 
             BigDecimal before = record.getBalance();
             if (before.compareTo(scaled) < 0) {
-                return failure(scaled, before, "Insufficient funds");
+                return new BalanceCheckResult(BalanceCheckResult.Status.INSUFFICIENT_FUNDS, scaled, before, before);
             }
-            return success(scaled, before.subtract(scaled));
+            return new BalanceCheckResult(BalanceCheckResult.Status.ALLOWED, scaled, before, before.subtract(scaled));
         }
     }
 

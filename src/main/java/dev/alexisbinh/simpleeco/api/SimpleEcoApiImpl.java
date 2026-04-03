@@ -119,28 +119,12 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
 
     @Override
     public BalanceCheckResult canDeposit(UUID accountId, BigDecimal amount) {
-        UUID validatedId = requireAccountId(accountId);
-        BigDecimal validatedAmount = requireAmount(amount);
-        BigDecimal currentBalance = getAccount(validatedId).map(AccountSnapshot::balance).orElse(BigDecimal.ZERO);
-        EconomyResponse response = service.canDeposit(validatedId, validatedAmount);
-        return new BalanceCheckResult(
-                mapCheckStatus(response),
-                response.amount,
-                currentBalance,
-                response.transactionSuccess() ? response.balance : currentBalance);
+        return service.canDeposit(requireAccountId(accountId), requireAmount(amount));
     }
 
     @Override
     public BalanceCheckResult canWithdraw(UUID accountId, BigDecimal amount) {
-        UUID validatedId = requireAccountId(accountId);
-        BigDecimal validatedAmount = requireAmount(amount);
-        BigDecimal currentBalance = getAccount(validatedId).map(AccountSnapshot::balance).orElse(BigDecimal.ZERO);
-        EconomyResponse response = service.canWithdraw(validatedId, validatedAmount);
-        return new BalanceCheckResult(
-                mapCheckStatus(response),
-                response.amount,
-                currentBalance,
-                response.transactionSuccess() ? response.balance : currentBalance);
+        return service.canWithdraw(requireAccountId(accountId), requireAmount(amount));
     }
 
     @Override
@@ -288,6 +272,22 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
     }
 
     @Override
+    public LeaderboardPage getTopAccounts(int page, int pageSize) {
+        int validatedPage = requirePositive(page, "page");
+        int validatedPageSize = requirePositive(pageSize, "pageSize");
+        List<AccountSnapshot> all = service.getBalTopSnapshot().stream()
+                .map(SimpleEcoApiImpl::toAccountSnapshot)
+                .toList();
+        int total = all.size();
+        int totalPages = total == 0 ? 0 : (int) Math.ceil(total / (double) validatedPageSize);
+        int fromIndex = (validatedPage - 1) * validatedPageSize;
+        List<AccountSnapshot> slice = fromIndex >= total
+                ? List.of()
+                : all.subList(fromIndex, Math.min(fromIndex + validatedPageSize, total));
+        return new LeaderboardPage(validatedPage, validatedPageSize, total, totalPages, slice);
+    }
+
+    @Override
     public EconomyRulesSnapshot getRules() {
         return new EconomyRulesSnapshot(
                 getCurrencyInfo(),
@@ -384,19 +384,6 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
             case RESET -> TransactionType.RESET;
             case PAY_SENT -> TransactionType.PAY_SENT;
             case PAY_RECEIVED -> TransactionType.PAY_RECEIVED;
-        };
-    }
-
-    private static BalanceCheckResult.Status mapCheckStatus(EconomyResponse response) {
-        if (response.transactionSuccess()) {
-            return BalanceCheckResult.Status.ALLOWED;
-        }
-        return switch (response.errorMessage) {
-            case "Account not found" -> BalanceCheckResult.Status.ACCOUNT_NOT_FOUND;
-            case "Amount must be positive", "Amount cannot be negative" -> BalanceCheckResult.Status.INVALID_AMOUNT;
-            case "Insufficient funds" -> BalanceCheckResult.Status.INSUFFICIENT_FUNDS;
-            case "Balance limit reached" -> BalanceCheckResult.Status.BALANCE_LIMIT;
-            default -> throw new SimpleEcoApiException("Unexpected balance check failure: " + response.errorMessage);
         };
     }
 

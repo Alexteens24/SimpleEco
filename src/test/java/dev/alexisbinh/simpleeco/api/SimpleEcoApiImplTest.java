@@ -5,7 +5,6 @@ import dev.alexisbinh.simpleeco.model.PayResult;
 import dev.alexisbinh.simpleeco.model.TransactionEntry;
 import dev.alexisbinh.simpleeco.model.TransactionType;
 import dev.alexisbinh.simpleeco.service.AccountService;
-import net.milkbowl.vault2.economy.EconomyResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -94,15 +93,13 @@ class SimpleEcoApiImplTest {
     void canWithdrawMapsServiceFailureIntoPluginResult() {
         UUID accountId = UUID.randomUUID();
         BigDecimal amount = new BigDecimal("15.00");
-        AccountRecord account = new AccountRecord(accountId, "Alice", new BigDecimal("10.00"), 1L, 2L);
-        EconomyResponse response = new EconomyResponse(
+        BalanceCheckResult checkResult = new BalanceCheckResult(
+                BalanceCheckResult.Status.INSUFFICIENT_FUNDS,
                 amount,
                 new BigDecimal("10.00"),
-                EconomyResponse.ResponseType.FAILURE,
-                "Insufficient funds");
+                new BigDecimal("10.00"));
 
-        when(service.getAccount(accountId)).thenReturn(Optional.of(account));
-        when(service.canWithdraw(accountId, amount)).thenReturn(response);
+        when(service.canWithdraw(accountId, amount)).thenReturn(checkResult);
 
         BalanceCheckResult result = api.canWithdraw(accountId, amount);
 

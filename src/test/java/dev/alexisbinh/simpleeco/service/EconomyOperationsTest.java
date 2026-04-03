@@ -1,5 +1,6 @@
 package dev.alexisbinh.simpleeco.service;
 
+import dev.alexisbinh.simpleeco.api.BalanceCheckResult;
 import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.api.TransferCheckResult;
 import dev.alexisbinh.simpleeco.event.BalanceChangeEvent;
@@ -466,10 +467,10 @@ class EconomyOperationsTest {
         config = configWith(0.0, 0, new BigDecimal("15.00"), 2);
         ops = buildOps(event -> { });
 
-        EconomyResponse resp = ops.canDeposit(aliceId, new BigDecimal("3.00"));
+        BalanceCheckResult resp = ops.canDeposit(aliceId, new BigDecimal("3.00"));
 
-        assertTrue(resp.transactionSuccess());
-        assertEquals(0, new BigDecimal("13.00").compareTo(resp.balance));
+        assertTrue(resp.isAllowed());
+        assertEquals(0, new BigDecimal("13.00").compareTo(resp.resultingBalance()));
     }
 
     @Test
@@ -478,40 +479,40 @@ class EconomyOperationsTest {
         ops = buildOps(event -> { });
 
         // Alice has 10.00, max 12.00, depositing 5.00 would give 15.00 > 12.00
-        EconomyResponse resp = ops.canDeposit(aliceId, new BigDecimal("5.00"));
+        BalanceCheckResult resp = ops.canDeposit(aliceId, new BigDecimal("5.00"));
 
-        assertFalse(resp.transactionSuccess());
+        assertFalse(resp.isAllowed());
     }
 
     @Test
     void canDeposit_amountRoundedToZeroFails() {
-        EconomyResponse resp = ops.canDeposit(aliceId, new BigDecimal("0.001"));
+        BalanceCheckResult resp = ops.canDeposit(aliceId, new BigDecimal("0.001"));
 
-        assertFalse(resp.transactionSuccess());
-        assertEquals("Amount must be positive", resp.errorMessage);
+        assertFalse(resp.isAllowed());
+        assertEquals(BalanceCheckResult.Status.INVALID_AMOUNT, resp.status());
     }
 
     @Test
     void canWithdraw_sufficientFundsSucceeds() {
-        EconomyResponse resp = ops.canWithdraw(aliceId, new BigDecimal("8.00"));
+        BalanceCheckResult resp = ops.canWithdraw(aliceId, new BigDecimal("8.00"));
 
-        assertTrue(resp.transactionSuccess());
-        assertEquals(0, new BigDecimal("2.00").compareTo(resp.balance));
+        assertTrue(resp.isAllowed());
+        assertEquals(0, new BigDecimal("2.00").compareTo(resp.resultingBalance()));
     }
 
     @Test
     void canWithdraw_insufficientFundsFails() {
-        EconomyResponse resp = ops.canWithdraw(aliceId, new BigDecimal("15.00"));
+        BalanceCheckResult resp = ops.canWithdraw(aliceId, new BigDecimal("15.00"));
 
-        assertFalse(resp.transactionSuccess());
+        assertFalse(resp.isAllowed());
     }
 
     @Test
     void canWithdraw_amountRoundedToZeroFails() {
-        EconomyResponse resp = ops.canWithdraw(aliceId, new BigDecimal("0.001"));
+        BalanceCheckResult resp = ops.canWithdraw(aliceId, new BigDecimal("0.001"));
 
-        assertFalse(resp.transactionSuccess());
-        assertEquals("Amount must be positive", resp.errorMessage);
+        assertFalse(resp.isAllowed());
+        assertEquals(BalanceCheckResult.Status.INVALID_AMOUNT, resp.status());
     }
 
     @Test

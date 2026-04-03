@@ -1,9 +1,12 @@
 package dev.alexisbinh.simpleeco.service;
 
+import dev.alexisbinh.simpleeco.api.BalanceCheckResult;
 import dev.alexisbinh.simpleeco.api.TransferPreviewResult;
 import dev.alexisbinh.simpleeco.event.AccountCreateEvent;
 import dev.alexisbinh.simpleeco.event.AccountDeleteEvent;
+import dev.alexisbinh.simpleeco.event.AccountDeletedEvent;
 import dev.alexisbinh.simpleeco.event.AccountRenameEvent;
+import dev.alexisbinh.simpleeco.event.AccountRenamedEvent;
 import dev.alexisbinh.simpleeco.model.AccountRecord;
 import dev.alexisbinh.simpleeco.model.PayResult;
 import dev.alexisbinh.simpleeco.model.TransactionEntry;
@@ -215,9 +218,10 @@ public class AccountService {
                     return RenameAccountStatus.NAME_IN_USE;
                 }
                 invalidateBalTopCache();
-                return RenameAccountStatus.RENAMED;
             }
         }
+        eventDispatcher.dispatch(new AccountRenamedEvent(id, event.getOldName(), validatedName));
+        return RenameAccountStatus.RENAMED;
     }
 
     public boolean deleteAccount(UUID id) {
@@ -272,6 +276,8 @@ public class AccountService {
                 return DeleteAccountStatus.FAILED;
             }
             invalidateBalTopCache();
+            AccountDeletedEvent deletedEvent = new AccountDeletedEvent(id, event.getPlayerName(), event.getBalance());
+            eventDispatcher.dispatch(deletedEvent);
             return DeleteAccountStatus.DELETED;
         }
     }
@@ -306,11 +312,11 @@ public class AccountService {
         return record.getBalance().compareTo(scaled) >= 0;
     }
 
-    public EconomyResponse canDeposit(UUID id, BigDecimal amount) {
+    public BalanceCheckResult canDeposit(UUID id, BigDecimal amount) {
         return economyOperations.canDeposit(id, amount);
     }
 
-    public EconomyResponse canWithdraw(UUID id, BigDecimal amount) {
+    public BalanceCheckResult canWithdraw(UUID id, BigDecimal amount) {
         return economyOperations.canWithdraw(id, amount);
     }
 

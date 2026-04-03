@@ -108,6 +108,14 @@ public interface SimpleEcoApi {
 
     List<AccountSnapshot> getTopAccounts(int limit);
 
+    /**
+     * Returns a page from the leaderboard, ordered by balance descending.
+     *
+     * @param page     1-based page number
+     * @param pageSize number of entries per page
+     */
+    LeaderboardPage getTopAccounts(int page, int pageSize);
+
     /** Returns the current configured operational rules exposed by the plugin. */
     EconomyRulesSnapshot getRules();
 

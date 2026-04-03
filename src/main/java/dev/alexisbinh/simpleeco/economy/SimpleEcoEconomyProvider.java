@@ -1,5 +1,6 @@
 package dev.alexisbinh.simpleeco.economy;
 
+import dev.alexisbinh.simpleeco.api.BalanceCheckResult;
 import dev.alexisbinh.simpleeco.service.AccountService;
 import net.milkbowl.vault2.economy.Economy;
 import net.milkbowl.vault2.economy.EconomyResponse;
@@ -228,7 +229,7 @@ public class SimpleEcoEconomyProvider implements Economy {
 
     @Override
     public EconomyResponse canWithdraw(String pluginName, UUID accountID, BigDecimal amount) {
-        return service.canWithdraw(accountID, amount);
+        return toVaultResponse(service.canWithdraw(accountID, amount));
     }
 
     @Override
@@ -243,7 +244,7 @@ public class SimpleEcoEconomyProvider implements Economy {
 
     @Override
     public EconomyResponse canDeposit(String pluginName, UUID accountID, BigDecimal amount) {
-        return service.canDeposit(accountID, amount);
+        return toVaultResponse(service.canDeposit(accountID, amount));
     }
 
     @Override
@@ -257,6 +258,20 @@ public class SimpleEcoEconomyProvider implements Economy {
     }
 
     // ── Shared accounts (not supported) ──────────────────────────────────────
+
+    private static EconomyResponse toVaultResponse(BalanceCheckResult result) {
+        if (result.isAllowed()) {
+            return new EconomyResponse(result.amount(), result.resultingBalance(), EconomyResponse.ResponseType.SUCCESS, "");
+        }
+        String message = switch (result.status()) {
+            case ACCOUNT_NOT_FOUND -> "Account not found";
+            case INVALID_AMOUNT -> "Amount must be positive";
+            case INSUFFICIENT_FUNDS -> "Insufficient funds";
+            case BALANCE_LIMIT -> "Balance limit reached";
+            default -> "Operation failed";
+        };
+        return new EconomyResponse(result.amount(), result.currentBalance(), EconomyResponse.ResponseType.FAILURE, message);
+    }
 
     @Override public boolean createSharedAccount(String p, UUID accountID, String name, UUID owner) { return false; }
     @Override public boolean isAccountOwner(String p, UUID accountID, UUID uuid) { return false; }
