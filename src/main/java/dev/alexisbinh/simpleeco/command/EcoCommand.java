@@ -16,7 +16,7 @@ import java.util.List;
 
 public class EcoCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBCOMMANDS = Arrays.asList("give", "take", "set", "reset", "delete", "reload");
+    private static final List<String> SUBCOMMANDS = Arrays.asList("give", "take", "set", "reset", "delete", "freeze", "unfreeze", "reload");
 
     private final AccountService service;
     private final SimpleEcoPlugin plugin;
@@ -32,7 +32,7 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
         if (args.length == 0) {
-            sender.sendMessage("§cUsage: /eco <give|take|set|reset|delete|reload> <player> [amount]");
+            sender.sendMessage("§cUsage: /eco <give|take|set|reset|delete|freeze|unfreeze|reload> <player> [amount]");
             return true;
         }
 
@@ -69,6 +69,57 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
                         Placeholder.unparsed("player", target.getLastKnownName()));
             } else {
                 messages.send(sender, "eco-delete-failed",
+                        Placeholder.unparsed("player", target.getLastKnownName()));
+            }
+            return true;
+        }
+
+        // freeze / unfreeze only need <player>
+        if (sub.equals("freeze")) {
+            if (!sender.hasPermission("simpleeco.command.eco.freeze")) {
+                messages.send(sender, "no-permission");
+                return true;
+            }
+            if (args.length < 2) {
+                sender.sendMessage("§cUsage: /eco freeze <player>");
+                return true;
+            }
+            var optTarget = service.findByName(args[1]);
+            if (optTarget.isEmpty()) {
+                messages.send(sender, "account-not-found", Placeholder.unparsed("player", args[1]));
+                return true;
+            }
+            var target = optTarget.get();
+            if (service.freezeAccount(target.getId())) {
+                messages.send(sender, "eco-freeze",
+                        Placeholder.unparsed("player", target.getLastKnownName()));
+            } else {
+                messages.send(sender, "eco-freeze-failed",
+                        Placeholder.unparsed("player", target.getLastKnownName()));
+            }
+            return true;
+        }
+
+        if (sub.equals("unfreeze")) {
+            if (!sender.hasPermission("simpleeco.command.eco.unfreeze")) {
+                messages.send(sender, "no-permission");
+                return true;
+            }
+            if (args.length < 2) {
+                sender.sendMessage("§cUsage: /eco unfreeze <player>");
+                return true;
+            }
+            var optTarget = service.findByName(args[1]);
+            if (optTarget.isEmpty()) {
+                messages.send(sender, "account-not-found", Placeholder.unparsed("player", args[1]));
+                return true;
+            }
+            var target = optTarget.get();
+            if (service.unfreezeAccount(target.getId())) {
+                messages.send(sender, "eco-unfreeze",
+                        Placeholder.unparsed("player", target.getLastKnownName()));
+            } else {
+                messages.send(sender, "eco-unfreeze-failed",
                         Placeholder.unparsed("player", target.getLastKnownName()));
             }
             return true;
@@ -114,7 +165,7 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
             default     -> null;
         };
         if (perm == null) {
-            sender.sendMessage("§cUnknown subcommand. Use: give, take, set, reset, delete, reload.");
+            sender.sendMessage("§cUnknown subcommand. Use: give, take, set, reset, delete, freeze, unfreeze, reload.");
             return true;
         }
         if (!sender.hasPermission(perm)) {
@@ -215,7 +266,7 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length == 2) {
             String sub = args[0].toLowerCase();
-            if (sub.equals("give") || sub.equals("take") || sub.equals("set") || sub.equals("reset") || sub.equals("delete")) {
+            if (sub.equals("give") || sub.equals("take") || sub.equals("set") || sub.equals("reset") || sub.equals("delete") || sub.equals("freeze") || sub.equals("unfreeze")) {
                 String prefix = args[1].toLowerCase();
                 return service.getAccountNames().stream()
                         .filter(n -> n.toLowerCase().startsWith(prefix))

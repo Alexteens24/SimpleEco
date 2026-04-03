@@ -53,6 +53,10 @@ public class SimpleEcoPlaceholderExpansion extends PlaceholderExpansion {
         if (params.equals("currency_plural")) {
             return service.getCurrencyPlural();
         }
+        if (params.equals("frozen")) {
+            if (player == null) return "";
+            return String.valueOf(service.isFrozen(player.getUniqueId()));
+        }
 
         // ── Baltop placeholders: top_<n>_name / top_<n>_balance ─────────────
         // e.g. %simpleeco_top_1_name%, %simpleeco_top_3_balance%

@@ -119,6 +119,23 @@ public interface SimpleEcoApi {
     /** Returns the current configured operational rules exposed by the plugin. */
     EconomyRulesSnapshot getRules();
 
+    /**
+     * Freezes the account. A frozen account cannot deposit, withdraw, or pay.
+     *
+     * @return {@code true} if the account existed and was frozen; {@code false} if not found
+     */
+    boolean freezeAccount(UUID accountId);
+
+    /**
+     * Unfreezes the account, restoring normal operation.
+     *
+     * @return {@code true} if the account existed and was unfrozen; {@code false} if not found
+     */
+    boolean unfreezeAccount(UUID accountId);
+
+    /** Returns {@code true} if the account exists and is currently frozen. */
+    boolean isFrozen(UUID accountId);
+
     CurrencyInfo getCurrencyInfo();
 
     String format(BigDecimal amount);

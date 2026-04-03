@@ -23,9 +23,9 @@ public enum DatabaseDialect {
 
         @Override
         public String upsertSql() {
-            return "INSERT INTO accounts(id,name,balance,created_at,updated_at) VALUES(?,?,?,?,?) "
+            return "INSERT INTO accounts(id,name,balance,created_at,updated_at,frozen) VALUES(?,?,?,?,?,?) "
                  + "ON CONFLICT(id) DO UPDATE SET "
-                 + "name=excluded.name, balance=excluded.balance, updated_at=excluded.updated_at";
+                 + "name=excluded.name, balance=excluded.balance, updated_at=excluded.updated_at, frozen=excluded.frozen";
         }
     },
 
@@ -43,7 +43,7 @@ public enum DatabaseDialect {
         @Override
         public String upsertSql() {
             // H2 proprietary MERGE shorthand
-            return "MERGE INTO accounts(id,name,balance,created_at,updated_at) KEY(id) VALUES(?,?,?,?,?)";
+            return "MERGE INTO accounts(id,name,balance,created_at,updated_at,frozen) KEY(id) VALUES(?,?,?,?,?,?)";
         }
     };
 

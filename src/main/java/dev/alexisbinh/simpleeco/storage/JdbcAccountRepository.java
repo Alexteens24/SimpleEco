@@ -54,6 +54,7 @@ public class JdbcAccountRepository implements AccountRepository {
                 """);
             ensureColumn(stmt, "transactions", "source", "VARCHAR(64)");
             ensureColumn(stmt, "transactions", "note", "VARCHAR(255)");
+            ensureColumn(stmt, "accounts", "frozen", "BOOLEAN NOT NULL DEFAULT FALSE");
             stmt.execute(
                 "CREATE INDEX IF NOT EXISTS idx_tx_target_ts ON transactions(target_id, ts DESC)"
             );
@@ -85,14 +86,18 @@ public class JdbcAccountRepository implements AccountRepository {
         List<AccountRecord> result = new ArrayList<>();
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(
-                 "SELECT id,name,balance,created_at,updated_at FROM accounts")) {
+                 "SELECT id,name,balance,created_at,updated_at,frozen FROM accounts")) {
             while (rs.next()) {
                 UUID id = UUID.fromString(rs.getString("id"));
                 String name = rs.getString("name");
                 BigDecimal balance = rs.getBigDecimal("balance");
                 long createdAt = rs.getLong("created_at");
                 long updatedAt = rs.getLong("updated_at");
-                result.add(new AccountRecord(id, name, balance, createdAt, updatedAt));
+                boolean frozen = rs.getBoolean("frozen");
+                AccountRecord rec = new AccountRecord(id, name, balance, createdAt, updatedAt);
+                rec.setFrozen(frozen);
+                rec.clearDirty(); // setFrozen marks dirty; clear so it isn't immediately flushed
+                result.add(rec);
             }
         }
         return result;
@@ -109,6 +114,7 @@ public class JdbcAccountRepository implements AccountRepository {
                 ps.setBigDecimal(3, r.getBalance());
                 ps.setLong(4, r.getCreatedAt());
                 ps.setLong(5, r.getUpdatedAt());
+                ps.setBoolean(6, r.isFrozen());
                 ps.addBatch();
             }
             ps.executeBatch();

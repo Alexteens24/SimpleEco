@@ -120,6 +120,11 @@ Common placeholders:
 | `eco-set` | `<player>`, `<balance>` |
 | `eco-reset` | `<player>`, `<balance>` |
 | `eco-delete` | `<player>` |
+| `eco-freeze` | `<player>` |
+| `eco-unfreeze` | `<player>` |
+| `eco-freeze-failed` | `<player>` |
+| `eco-unfreeze-failed` | `<player>` |
+| `account-frozen` | *(none)* |
 | `eco-balance-limit` | `<player>`, `<limit>` |
 | `baltop-header` | `<page>`, `<total>` |
 | `baltop-entry` | `<rank>`, `<player>`, `<balance>` |

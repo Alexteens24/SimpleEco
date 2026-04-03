@@ -13,7 +13,8 @@ public record TransferResult(Status status, BigDecimal sent, BigDecimal received
         CANCELLED,
         TOO_LOW,
         INVALID_AMOUNT,
-        SELF_TRANSFER
+        SELF_TRANSFER,
+        FROZEN
     }
 
     public boolean isSuccess() {

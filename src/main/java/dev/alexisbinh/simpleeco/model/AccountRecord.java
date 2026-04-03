@@ -13,6 +13,7 @@ public final class AccountRecord {
     private final long createdAt;
     private volatile long updatedAt;
     private volatile boolean dirty;
+    private volatile boolean frozen;
 
     public AccountRecord(UUID id, String lastKnownName, BigDecimal balance, long createdAt, long updatedAt) {
         this.id = id;
@@ -29,6 +30,7 @@ public final class AccountRecord {
     public long getCreatedAt() { return createdAt; }
     public long getUpdatedAt() { return updatedAt; }
     public boolean isDirty() { return dirty; }
+    public boolean isFrozen() { return frozen; }
 
     public void setLastKnownName(String name) {
         this.lastKnownName = name;
@@ -42,6 +44,11 @@ public final class AccountRecord {
         this.dirty = true;
     }
 
+    public void setFrozen(boolean frozen) {
+        this.frozen = frozen;
+        this.dirty = true;
+    }
+
     public void markDirty() {
         this.dirty = true;
     }
@@ -52,6 +59,8 @@ public final class AccountRecord {
 
     /** Returns an immutable snapshot safe to flush to DB while modifications continue. */
     public AccountRecord snapshot() {
-        return new AccountRecord(id, lastKnownName, balance, createdAt, updatedAt);
+        AccountRecord snap = new AccountRecord(id, lastKnownName, balance, createdAt, updatedAt);
+        snap.frozen = this.frozen;
+        return snap;
     }
 }

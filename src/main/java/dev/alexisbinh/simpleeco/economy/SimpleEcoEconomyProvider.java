@@ -268,6 +268,7 @@ public class SimpleEcoEconomyProvider implements Economy {
             case INVALID_AMOUNT -> "Amount must be positive";
             case INSUFFICIENT_FUNDS -> "Insufficient funds";
             case BALANCE_LIMIT -> "Balance limit reached";
+            case FROZEN -> "Account is frozen";
             default -> "Operation failed";
         };
         return new EconomyResponse(result.amount(), result.currentBalance(), EconomyResponse.ResponseType.FAILURE, message);

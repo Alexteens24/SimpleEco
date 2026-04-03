@@ -59,6 +59,9 @@ final class EconomyOperations {
             if (!accountRegistry.isLive(id, record)) {
                 return new BalanceCheckResult(BalanceCheckResult.Status.ACCOUNT_NOT_FOUND, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
             }
+            if (record.isFrozen()) {
+                return new BalanceCheckResult(BalanceCheckResult.Status.FROZEN, scaled, record.getBalance(), record.getBalance());
+            }
 
             BigDecimal before = record.getBalance();
             BigDecimal newBalance = before.add(scaled);
@@ -84,6 +87,9 @@ final class EconomyOperations {
         synchronized (record) {
             if (!accountRegistry.isLive(id, record)) {
                 return new BalanceCheckResult(BalanceCheckResult.Status.ACCOUNT_NOT_FOUND, scaled, BigDecimal.ZERO, BigDecimal.ZERO);
+            }
+            if (record.isFrozen()) {
+                return new BalanceCheckResult(BalanceCheckResult.Status.FROZEN, scaled, record.getBalance(), record.getBalance());
             }
 
             BigDecimal before = record.getBalance();
@@ -112,6 +118,9 @@ final class EconomyOperations {
         synchronized (record) {
             if (!accountRegistry.isLive(id, record)) {
                 return failure(scaled, BigDecimal.ZERO, "Account not found");
+            }
+            if (record.isFrozen()) {
+                return failure(scaled, record.getBalance(), "Account is frozen");
             }
 
             BigDecimal before = record.getBalance();
@@ -169,6 +178,9 @@ final class EconomyOperations {
         synchronized (record) {
             if (!accountRegistry.isLive(id, record)) {
                 return failure(scaled, BigDecimal.ZERO, "Account not found");
+            }
+            if (record.isFrozen()) {
+                return failure(scaled, record.getBalance(), "Account is frozen");
             }
             BigDecimal before = record.getBalance();
             previewBalance = before;
@@ -490,6 +502,9 @@ final class EconomyOperations {
         AccountRecord toRecord = accountRegistry.getLiveRecord(toId);
         if (fromRecord == null || toRecord == null) {
             return PayResult.accountNotFound();
+        }
+        if (fromRecord.isFrozen() || toRecord.isFrozen()) {
+            return PayResult.frozen();
         }
 
         BigDecimal tax = scaled

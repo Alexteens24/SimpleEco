@@ -299,6 +299,21 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
     }
 
     @Override
+    public boolean freezeAccount(UUID accountId) {
+        return service.freezeAccount(requireAccountId(accountId));
+    }
+
+    @Override
+    public boolean unfreezeAccount(UUID accountId) {
+        return service.unfreezeAccount(requireAccountId(accountId));
+    }
+
+    @Override
+    public boolean isFrozen(UUID accountId) {
+        return service.isFrozen(requireAccountId(accountId));
+    }
+
+    @Override
     public CurrencyInfo getCurrencyInfo() {
         return new CurrencyInfo(
                 service.getCurrencyId(),
@@ -349,7 +364,8 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
                 record.getLastKnownName(),
                 record.getBalance(),
                 record.getCreatedAt(),
-                record.getUpdatedAt());
+                record.getUpdatedAt(),
+                record.isFrozen());
     }
 
     private static TransactionSnapshot toTransactionSnapshot(TransactionEntry entry) {
@@ -396,6 +412,7 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
             case "Amount must be positive", "Amount cannot be negative" -> BalanceChangeResult.Status.INVALID_AMOUNT;
             case "Insufficient funds" -> BalanceChangeResult.Status.INSUFFICIENT_FUNDS;
             case "Balance limit reached" -> BalanceChangeResult.Status.BALANCE_LIMIT;
+            case "Account is frozen" -> BalanceChangeResult.Status.FROZEN;
             case "Cancelled by plugin" -> BalanceChangeResult.Status.CANCELLED;
             default -> throw new SimpleEcoApiException("Unexpected balance change failure: " + response.errorMessage);
         };
@@ -412,6 +429,7 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
             case TOO_LOW -> TransferResult.Status.TOO_LOW;
             case INVALID_AMOUNT -> TransferResult.Status.INVALID_AMOUNT;
             case SELF_TRANSFER -> TransferResult.Status.SELF_TRANSFER;
+            case FROZEN -> TransferResult.Status.FROZEN;
         };
     }
 

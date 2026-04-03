@@ -8,6 +8,7 @@ public record AccountSnapshot(
         String lastKnownName,
         BigDecimal balance,
         long createdAt,
-        long updatedAt
+        long updatedAt,
+        boolean frozen
 ) {
 }

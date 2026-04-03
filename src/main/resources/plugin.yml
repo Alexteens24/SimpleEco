@@ -34,7 +34,7 @@ commands:
     usage: /pay <player> <amount>
   eco:
     description: Economy administration
-    usage: /eco <give|take|set|reset|delete|reload> <player> [amount]
+    usage: /eco <give|take|set|reset|delete|freeze|unfreeze|reload> <player> [amount]
     aliases: [economy]
   history:
     description: View transaction history
@@ -51,6 +51,8 @@ permissions:
       simpleeco.command.eco.set: true
       simpleeco.command.eco.reset: true
       simpleeco.command.eco.delete: true
+      simpleeco.command.eco.freeze: true
+      simpleeco.command.eco.unfreeze: true
       simpleeco.command.eco.reload: true
       simpleeco.command.balance.others: true
       simpleeco.command.history.others: true
@@ -83,6 +85,12 @@ permissions:
     default: op
   simpleeco.command.eco.delete:
     description: Delete a player's current economy account and own history
+    default: op
+  simpleeco.command.eco.freeze:
+    description: Freeze a player's economy account
+    default: op
+  simpleeco.command.eco.unfreeze:
+    description: Unfreeze a player's economy account
     default: op
   simpleeco.command.history:
     description: View own transaction history

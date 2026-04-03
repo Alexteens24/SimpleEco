@@ -74,6 +74,11 @@ messages:
   eco-balance-limit: "<red><player> would exceed the maximum balance of <yellow><limit><red>."
   eco-delete: "<green>Deleted <yellow><player><green>'s account."
   eco-delete-failed: "<red>Failed to delete <yellow><player><red>'s account."
+  eco-freeze: "<green>Frozen <yellow><player><green>'s account."
+  eco-unfreeze: "<green>Unfrozen <yellow><player><green>'s account."
+  eco-freeze-failed: "<red>Failed to freeze <yellow><player><red>'s account."
+  eco-unfreeze-failed: "<red>Failed to unfreeze <yellow><player><red>'s account."
+  account-frozen: "<red>This account is frozen and cannot perform transactions."
   eco-reset: "<green>Reset <yellow><player><green>'s balance to <yellow><balance><green>."
   eco-reload: "<green>SimpleEco configuration reloaded."
 

@@ -9,7 +9,8 @@ public record BalanceCheckResult(Status status, BigDecimal amount, BigDecimal cu
         ACCOUNT_NOT_FOUND,
         INVALID_AMOUNT,
         INSUFFICIENT_FUNDS,
-        BALANCE_LIMIT
+        BALANCE_LIMIT,
+        FROZEN
     }
 
     public boolean isAllowed() {

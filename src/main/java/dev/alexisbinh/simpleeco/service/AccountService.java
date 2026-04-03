@@ -407,6 +407,33 @@ public class AccountService {
         return -1;
     }
 
+    // ── Account freeze ────────────────────────────────────────────────────────
+
+    public boolean freezeAccount(UUID id) {
+        AccountRecord record = accountRegistry.getLiveRecord(id);
+        if (record == null) return false;
+        synchronized (record) {
+            if (!accountRegistry.isLive(id, record)) return false;
+            record.setFrozen(true);
+            return true;
+        }
+    }
+
+    public boolean unfreezeAccount(UUID id) {
+        AccountRecord record = accountRegistry.getLiveRecord(id);
+        if (record == null) return false;
+        synchronized (record) {
+            if (!accountRegistry.isLive(id, record)) return false;
+            record.setFrozen(false);
+            return true;
+        }
+    }
+
+    public boolean isFrozen(UUID id) {
+        AccountRecord record = accountRegistry.getLiveRecord(id);
+        return record != null && record.isFrozen();
+    }
+
     // ── Formatting / currency ─────────────────────────────────────────────────
 
     public String format(BigDecimal amount) {
