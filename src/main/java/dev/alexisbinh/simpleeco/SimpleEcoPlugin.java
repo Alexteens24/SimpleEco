@@ -13,6 +13,7 @@ import dev.alexisbinh.simpleeco.storage.DatabaseDialect;
 import dev.alexisbinh.simpleeco.storage.JdbcAccountRepository;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 import net.milkbowl.vault2.economy.Economy;
+import org.bstats.bukkit.Metrics;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -116,6 +117,9 @@ public class SimpleEcoPlugin extends JavaPlugin {
 
         // ── History prune scheduler ───────────────────────────────────────────
         restartPruneTask();
+
+        // ── bStats ────────────────────────────────────────────────────────────
+        new Metrics(this, 30556);
 
         getLogger().info("SimpleEco enabled. Backend: " + dialect.name().toLowerCase()
                 + " | Accounts loaded: true");

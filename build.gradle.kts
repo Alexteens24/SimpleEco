@@ -15,7 +15,7 @@ abstract class VaultJvmFix : ComponentMetadataRule {
 
 plugins {
     java
-    id("com.gradleup.shadow") version "8.3.6"
+    id("com.gradleup.shadow") version "9.3.1"
 }
 
 group = "dev.alexisbinh"
@@ -40,6 +40,7 @@ dependencies {
     compileOnly("me.clip:placeholderapi:2.11.6")
     compileOnly("org.xerial:sqlite-jdbc:3.51.3.0")
     compileOnly("com.h2database:h2:2.4.240")
+    implementation("org.bstats:bstats-bukkit:3.2.1")
 
     testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
@@ -66,6 +67,7 @@ tasks.compileJava {
 
 tasks.shadowJar {
     archiveClassifier.set("")
+    relocate("org.bstats", "${project.group}.libs.bstats")
 }
 
 tasks.build {
