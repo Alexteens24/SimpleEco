@@ -378,7 +378,7 @@ class AccountServicePersistenceIntegrationTest {
     }
 
     @Test
-    void balanceMutationRefreshesBalTopImmediately() throws Exception {
+    void balanceMutationDoesNotImmediatelyInvalidateBalTopCache() throws Exception {
         JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "baltop-refresh-test");
         try {
             AccountService service = newService(repository);
@@ -389,13 +389,15 @@ class AccountServicePersistenceIntegrationTest {
             service.createAccount(bobId, "Bob");
             service.deposit(aliceId, new BigDecimal("45.00"));
 
+            // Seed the cache: Alice is currently #1
             List<AccountRecord> first = service.getBalTopSnapshot();
             assertEquals("Alice", first.getFirst().getLastKnownName());
 
+            // Bob now has more money in memory, but the cache is still fresh (TTL not expired)
             service.deposit(bobId, new BigDecimal("100.00"));
 
-            List<AccountRecord> refreshed = service.getBalTopSnapshot();
-            assertEquals("Bob", refreshed.getFirst().getLastKnownName());
+            List<AccountRecord> cached = service.getBalTopSnapshot();
+            assertEquals("Alice", cached.getFirst().getLastKnownName());
 
             service.shutdown();
         } finally {

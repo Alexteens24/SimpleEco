@@ -34,7 +34,6 @@ class EconomyOperationsTest {
     private EconomyConfigSnapshot config;
     private List<TransactionEntry> logged;
     private List<Event> dispatchedEvents;
-    private int leaderboardInvalidations;
     private EconomyOperations ops;
 
     private UUID aliceId;
@@ -45,7 +44,6 @@ class EconomyOperationsTest {
         registry = new AccountRegistry();
         logged = new ArrayList<>();
         dispatchedEvents = new ArrayList<>();
-        leaderboardInvalidations = 0;
 
         aliceId = UUID.randomUUID();
         bobId = UUID.randomUUID();
@@ -69,7 +67,6 @@ class EconomyOperationsTest {
         assertEquals(1, logged.size());
         assertEquals(TransactionType.GIVE, logged.getFirst().getType());
         assertEquals(0, new BigDecimal("3.50").compareTo(logged.getFirst().getAmount()));
-        assertEquals(1, leaderboardInvalidations);
         assertEquals(List.of(BalanceChangeEvent.class, BalanceChangedEvent.class),
             dispatchedEvents.stream().map(Event::getClass).toList());
     }
@@ -85,7 +82,6 @@ class EconomyOperationsTest {
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
         assertTrue(logged.isEmpty());
-        assertEquals(0, leaderboardInvalidations);
         assertEquals(List.of(BalanceChangeEvent.class), dispatchedEvents.stream().map(Event::getClass).toList());
     }
 
@@ -145,7 +141,6 @@ class EconomyOperationsTest {
         assertEquals(0, new BigDecimal("6.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
         assertEquals(1, logged.size());
         assertEquals(TransactionType.TAKE, logged.getFirst().getType());
-        assertEquals(1, leaderboardInvalidations);
     }
 
     @Test
@@ -334,8 +329,7 @@ class EconomyOperationsTest {
         config = configWith(0.0, 60, null, 2); // 60 second cooldown
         ConcurrentHashMap<UUID, Long> cooldownMap = new ConcurrentHashMap<>();
         cooldownMap.put(aliceId, System.currentTimeMillis()); // just paid now
-        ops = new EconomyOperations(registry, () -> config, cooldownMap, logged::add,
-                () -> leaderboardInvalidations++, event -> { });
+        ops = new EconomyOperations(registry, () -> config, cooldownMap, logged::add, event -> { });
 
         PayResult result = ops.pay(aliceId, bobId, new BigDecimal("1.00"));
 
@@ -425,8 +419,7 @@ class EconomyOperationsTest {
         config = configWith(0.0, 60, null, 2);
         ConcurrentHashMap<UUID, Long> cooldownMap = new ConcurrentHashMap<>();
         cooldownMap.put(aliceId, System.currentTimeMillis());
-        ops = new EconomyOperations(registry, () -> config, cooldownMap, logged::add,
-                () -> leaderboardInvalidations++, event -> { });
+        ops = new EconomyOperations(registry, () -> config, cooldownMap, logged::add, event -> { });
 
         TransferPreviewResult result = ops.previewTransfer(aliceId, bobId, new BigDecimal("1.00"));
 
@@ -549,7 +542,7 @@ class EconomyOperationsTest {
 
     private EconomyOperations buildOps(Consumer<Event> listener) {
         return new EconomyOperations(registry, () -> config, new ConcurrentHashMap<>(),
-                logged::add, () -> leaderboardInvalidations++, event -> {
+                logged::add, event -> {
                     dispatchedEvents.add(event);
                     listener.accept(event);
                 });

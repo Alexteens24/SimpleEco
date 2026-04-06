@@ -26,20 +26,17 @@ final class EconomyOperations {
     private final Supplier<EconomyConfigSnapshot> configSupplier;
     private final Map<UUID, Long> lastPayTime;
     private final Consumer<TransactionEntry> transactionLogger;
-    private final Runnable leaderboardInvalidator;
     private final EventDispatcher eventDispatcher;
 
     EconomyOperations(AccountRegistry accountRegistry,
                       Supplier<EconomyConfigSnapshot> configSupplier,
                       Map<UUID, Long> lastPayTime,
                       Consumer<TransactionEntry> transactionLogger,
-                      Runnable leaderboardInvalidator,
                       EventDispatcher eventDispatcher) {
         this.accountRegistry = accountRegistry;
         this.configSupplier = configSupplier;
         this.lastPayTime = lastPayTime;
         this.transactionLogger = transactionLogger;
-        this.leaderboardInvalidator = leaderboardInvalidator;
         this.eventDispatcher = eventDispatcher;
     }
 
@@ -177,7 +174,6 @@ final class EconomyOperations {
             }
 
             record.setBalance(currency.id(), newBalance);
-            leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(
                     TransactionType.GIVE, null, id, scaled, before, newBalance, System.currentTimeMillis(), null, null, currency.id()));
             completedEvent = new BalanceChangedEvent(id, before, newBalance, BalanceChangeEvent.Reason.GIVE, currency.id());
@@ -245,7 +241,6 @@ final class EconomyOperations {
             BigDecimal newBalance = before.subtract(scaled);
 
             record.setBalance(currency.id(), newBalance);
-            leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(
                     TransactionType.TAKE, null, id, scaled, before, newBalance, System.currentTimeMillis(), null, null, currency.id()));
             completedEvent = new BalanceChangedEvent(id, before, newBalance, BalanceChangeEvent.Reason.TAKE, currency.id());
@@ -309,7 +304,6 @@ final class EconomyOperations {
             }
 
             record.setBalance(currency.id(), scaled);
-            leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(
                     TransactionType.SET, null, id, scaled, before, scaled, System.currentTimeMillis(), null, null, currency.id()));
             completedEvent = new BalanceChangedEvent(id, before, scaled, BalanceChangeEvent.Reason.SET, currency.id());
@@ -361,7 +355,6 @@ final class EconomyOperations {
 
             BigDecimal before = record.getBalance(currency.id());
             record.setBalance(currency.id(), startingBalance);
-            leaderboardInvalidator.run();
             transactionLogger.accept(new TransactionEntry(
                     TransactionType.RESET, null, id, startingBalance, before, startingBalance,
                     System.currentTimeMillis(), null, null, currency.id()));
@@ -638,7 +631,6 @@ final class EconomyOperations {
                 fromRecord.setBalance(currency.id(), fromAfter);
                 toRecord.setBalance(currency.id(), toAfter);
                 lastPayTime.put(fromId, System.currentTimeMillis());
-                leaderboardInvalidator.run();
 
                 long now = System.currentTimeMillis();
                 transactionLogger.accept(new TransactionEntry(TransactionType.PAY_SENT, toId, fromId, scaled, fromBefore, fromAfter, now, null, null, currency.id()));
