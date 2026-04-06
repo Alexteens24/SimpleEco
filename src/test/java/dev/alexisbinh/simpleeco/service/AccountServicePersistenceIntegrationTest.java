@@ -588,12 +588,24 @@ class AccountServicePersistenceIntegrationTest {
         }
 
         @Override
+        public synchronized List<TransactionEntry> getTransactions(UUID targetId, int limit, int offset,
+                TransactionType type, long fromMs, long toMs, String currencyId) {
+            return filterTransactions(targetId, type, fromMs, toMs, limit, offset);
+        }
+
+        @Override
         public synchronized int countTransactions(UUID targetId) {
             return filterTransactions(targetId, null, 0, Long.MAX_VALUE, Integer.MAX_VALUE, 0).size();
         }
 
         @Override
         public synchronized int countTransactions(UUID targetId, TransactionType type, long fromMs, long toMs) {
+            return filterTransactions(targetId, type, fromMs, toMs, Integer.MAX_VALUE, 0).size();
+        }
+
+        @Override
+        public synchronized int countTransactions(UUID targetId, TransactionType type,
+                long fromMs, long toMs, String currencyId) {
             return filterTransactions(targetId, type, fromMs, toMs, Integer.MAX_VALUE, 0).size();
         }
 
