@@ -67,6 +67,87 @@ class AccountServicePersistenceIntegrationTest {
     }
 
     @Test
+    void createAccountSeedsConfiguredStartingBalancesForAllCurrencies() throws Exception {
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "multi-starting-balance-test");
+        try {
+            AccountService writer = newServiceWithConfig(repository, multiCurrencyConfig("simpleeco"));
+            UUID accountId = UUID.randomUUID();
+
+            assertTrue(writer.createAccount(accountId, "Alice"));
+            assertEquals(0, BigDecimal.ZERO.compareTo(writer.getBalance(accountId)));
+            assertEquals(0, new BigDecimal("5").compareTo(writer.getBalance(accountId, "gems")));
+            writer.shutdown();
+
+            AccountService reader = newServiceWithConfig(repository, multiCurrencyConfig("simpleeco"));
+            reader.loadAll();
+
+            assertEquals(0, BigDecimal.ZERO.compareTo(reader.getBalance(accountId)));
+            assertEquals(0, new BigDecimal("5").compareTo(reader.getBalance(accountId, "gems")));
+            reader.shutdown();
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
+    void changingDefaultCurrencyAcrossRestartDoesNotCopyLegacyBalanceIntoNewDefault() throws Exception {
+        String filename = "default-currency-restart-test";
+        UUID accountId = UUID.randomUUID();
+
+        JdbcAccountRepository writerRepository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), filename, "simpleeco");
+        try {
+            AccountService writer = newServiceWithConfig(writerRepository, testConfig(0.0, -1));
+
+            assertTrue(writer.createAccount(accountId, "Alice"));
+            assertTrue(writer.deposit(accountId, new BigDecimal("10.00")).transactionSuccess());
+            writer.shutdown();
+        } finally {
+            writerRepository.close();
+        }
+
+        JdbcAccountRepository readerRepository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), filename, "gems");
+        try {
+            AccountService reader = newServiceWithConfig(readerRepository, multiCurrencyConfig("gems"));
+            reader.loadAll();
+
+            assertEquals(0, BigDecimal.ZERO.compareTo(reader.getBalance(accountId)));
+            assertEquals(0, BigDecimal.ZERO.compareTo(reader.getBalance(accountId, "gems")));
+            assertEquals(0, new BigDecimal("15.00").compareTo(reader.getBalance(accountId, "simpleeco")));
+
+            reader.shutdown();
+        } finally {
+            readerRepository.close();
+        }
+    }
+
+    @Test
+    void reloadConfigSwitchesDefaultCurrencyWithoutLosingNamedBalances() throws Exception {
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "reload-default-currency-test");
+        try {
+            AccountService service = newServiceWithConfig(repository, multiCurrencyConfig("simpleeco"));
+            UUID accountId = UUID.randomUUID();
+
+            assertTrue(service.createAccount(accountId, "Alice"));
+            assertTrue(service.deposit(accountId, new BigDecimal("10.00")).transactionSuccess());
+            assertTrue(service.deposit(accountId, "gems", new BigDecimal("2")).transactionSuccess());
+
+            assertEquals(0, new BigDecimal("10.00").compareTo(service.getBalance(accountId)));
+            assertEquals(0, new BigDecimal("7").compareTo(service.getBalance(accountId, "gems")));
+
+            service.reloadConfig(multiCurrencyConfig("gems"));
+
+            assertEquals("gems", service.getCurrencyId());
+            assertEquals(0, new BigDecimal("7").compareTo(service.getBalance(accountId)));
+            assertEquals(0, new BigDecimal("7").compareTo(service.getBalance(accountId, "gems")));
+            assertEquals(0, new BigDecimal("10.00").compareTo(service.getBalance(accountId, "simpleeco")));
+
+            service.shutdown();
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
     void payRejectsSelfTransferWithoutMutatingBalance() throws Exception {
         JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "self-pay-test");
         try {
@@ -386,11 +467,15 @@ class AccountServicePersistenceIntegrationTest {
     // ── helpers ───────────────────────────────────────────────────────────────
 
     private static AccountService newService(AccountRepository repository) {
+        return newServiceWithConfig(repository, testConfig(0.0, -1));
+    }
+
+    private static AccountService newServiceWithConfig(AccountRepository repository, YamlConfiguration config) {
         return new AccountService(
                 repository,
                 Logger.getLogger("simpleeco-test"),
                 "simpleeco-test",
-                testConfig(0.0, -1),
+                config,
                 event -> { }
         );
     }
@@ -400,23 +485,11 @@ class AccountServicePersistenceIntegrationTest {
     }
 
     private static AccountService newServiceWithTax(JdbcAccountRepository repository, double taxPercent) {
-        return new AccountService(
-                repository,
-                Logger.getLogger("simpleeco-test"),
-                "simpleeco-test",
-                testConfig(taxPercent, -1),
-                event -> { }
-        );
+        return newServiceWithConfig(repository, testConfig(taxPercent, -1));
     }
 
     private static AccountService newServiceWithRetention(JdbcAccountRepository repository, int retentionDays) {
-        return new AccountService(
-                repository,
-                Logger.getLogger("simpleeco-test"),
-                "simpleeco-test",
-                testConfig(0.0, retentionDays),
-                event -> { }
-        );
+        return newServiceWithConfig(repository, testConfig(0.0, retentionDays));
     }
 
     private static YamlConfiguration testConfig(double taxPercent, int retentionDays) {
@@ -432,6 +505,27 @@ class AccountServicePersistenceIntegrationTest {
         config.set("pay.min-amount", 0.01);
         config.set("baltop.cache-ttl-seconds", 30);
         config.set("history.retention-days", retentionDays);
+        return config;
+    }
+
+    private static YamlConfiguration multiCurrencyConfig(String defaultCurrencyId) {
+        YamlConfiguration config = new YamlConfiguration();
+        config.set("currencies.default", defaultCurrencyId);
+        config.set("currencies.definitions.simpleeco.name-singular", "Dollar");
+        config.set("currencies.definitions.simpleeco.name-plural", "Dollars");
+        config.set("currencies.definitions.simpleeco.decimal-digits", 2);
+        config.set("currencies.definitions.simpleeco.starting-balance", 0.0);
+        config.set("currencies.definitions.simpleeco.max-balance", -1.0);
+        config.set("currencies.definitions.gems.name-singular", "Gem");
+        config.set("currencies.definitions.gems.name-plural", "Gems");
+        config.set("currencies.definitions.gems.decimal-digits", 0);
+        config.set("currencies.definitions.gems.starting-balance", 5.0);
+        config.set("currencies.definitions.gems.max-balance", -1.0);
+        config.set("pay.cooldown-seconds", 0);
+        config.set("pay.tax-percent", 0.0);
+        config.set("pay.min-amount", 0.01);
+        config.set("baltop.cache-ttl-seconds", 30);
+        config.set("history.retention-days", -1);
         return config;
     }
 

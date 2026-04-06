@@ -280,6 +280,44 @@ class SimpleEcoApiImplTest {
     }
 
     @Test
+    void currencyAwareTopAccountsUseRequestedCurrencyBalanceInSnapshots() {
+        AccountRecord account = new AccountRecord(
+                UUID.randomUUID(),
+                "Alice",
+                "simpleeco",
+                Map.of("simpleeco", new BigDecimal("100.00"), "gems", new BigDecimal("7")),
+                1L,
+                2L);
+
+        when(service.getCanonicalCurrencyId("GEMS")).thenReturn("gems");
+        when(service.getBalTopSnapshot("gems")).thenReturn(List.of(account));
+
+        List<AccountSnapshot> top = api.getTopAccounts(10, "GEMS");
+
+        assertEquals(1, top.size());
+        assertEquals(0, new BigDecimal("7").compareTo(top.getFirst().balance()));
+    }
+
+    @Test
+    void currencyAwareLeaderboardPageUsesRequestedCurrencyBalanceInSnapshots() {
+        AccountRecord account = new AccountRecord(
+                UUID.randomUUID(),
+                "Alice",
+                "simpleeco",
+                Map.of("simpleeco", new BigDecimal("100.00"), "gems", new BigDecimal("7")),
+                1L,
+                2L);
+
+        when(service.getCanonicalCurrencyId("gems")).thenReturn("gems");
+        when(service.getBalTopSnapshot("gems")).thenReturn(List.of(account));
+
+        LeaderboardPage page = api.getTopAccounts(1, 10, "gems");
+
+        assertEquals(1, page.entries().size());
+        assertEquals(0, new BigDecimal("7").compareTo(page.entries().getFirst().balance()));
+    }
+
+    @Test
     void getUUIDNameMapDelegatesToService() {
         UUID id = UUID.randomUUID();
         when(service.getUUIDNameMap()).thenReturn(Map.of(id, "Alice"));
@@ -416,5 +454,20 @@ class SimpleEcoApiImplTest {
 
         assertThrows(SimpleEcoApiException.class,
                 () -> api.logCustomTransaction(accountId, new BigDecimal("10.00"), TransactionKind.GIVE));
+    }
+
+    @Test
+    void currencyAwareCustomTransactionCanonicalizesCurrencyIdBeforeWriting() {
+        UUID accountId = UUID.randomUUID();
+        when(service.getCanonicalCurrencyId(" GEMS ")).thenReturn("gems");
+        when(service.hasAccount(accountId)).thenReturn(true);
+        when(service.getBalance(accountId, "gems")).thenReturn(new BigDecimal("100.00"));
+
+        api.logCustomTransaction(accountId, " GEMS ", new BigDecimal("10.00"), TransactionKind.GIVE);
+
+        verify(service).logCustomTransaction(eq(accountId), argThat(entry ->
+                "gems".equals(entry.getCurrencyId())
+                        && 0 == new BigDecimal("100.00").compareTo(entry.getBalanceBefore())
+                        && 0 == new BigDecimal("100.00").compareTo(entry.getBalanceAfter())));
     }
 }

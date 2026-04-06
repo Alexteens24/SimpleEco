@@ -8,6 +8,7 @@ What it does:
 
 - Keeps balances in memory for fast reads and writes.
 - Stores data locally in SQLite or H2 under `plugins/SimpleEco/`.
+- Supports multiple named currencies with a configurable default-currency compatibility layer.
 - Exposes Vault v1 and VaultUnlocked v2 economy providers.
 - Supports PlaceholderAPI if it is installed.
 
@@ -55,6 +56,7 @@ VaultUnlocked is loaded by Paper as plugin `Vault`. SimpleEco depends on that ru
 ## Owner Notes
 
 - SimpleEco is meant for one server with local storage.
+- New configs should use `currencies.default` and `currencies.definitions.*`; the legacy `currency.*` block is still read for backward compatibility.
 - SQLite companion files such as `economy.db-wal` and `economy.db-shm` are normal while the server is running.
 - Balance data is flushed periodically and on normal shutdown.
 - History can be kept forever or pruned with `history.retention-days`.

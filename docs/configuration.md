@@ -8,20 +8,32 @@ Most settings reload safely. Storage backend and storage file changes do not. Tr
 ## Currency
 
 ```yaml
-currency:
-  id: "simpleeco"
-  name-singular: "Dollar"
-  name-plural: "Dollars"
-  decimal-digits: 2
-  starting-balance: 0.00
-  max-balance: -1
+currencies:
+  default: "simpleeco"
+  definitions:
+    simpleeco:
+      name-singular: "Dollar"
+      name-plural: "Dollars"
+      decimal-digits: 2
+      starting-balance: 0.00
+      max-balance: -1
+    gems:
+      name-singular: "Gem"
+      name-plural: "Gems"
+      decimal-digits: 0
+      starting-balance: 0
+      max-balance: -1
 ```
 
 Notes:
 
+- `currencies.default` is the currency used by commands, placeholders, Vault v1, and API methods that do not take an explicit `currencyId`.
+- Every configured currency has its own `decimal-digits`, `starting-balance`, and `max-balance`.
 - `decimal-digits` controls rounding and display.
 - `starting-balance` affects new accounts and `/eco reset`.
 - `max-balance: -1` means unlimited.
+- The legacy `currency.*` block is still accepted for backward compatibility, but new configs should use `currencies.*`.
+- Reloading after changing `currencies.default` switches the default-currency wrappers immediately. Named balances stay attached to their own currency ids.
 
 ## Storage
 

@@ -143,11 +143,15 @@ public class AccountService {
             }
             EconomyConfigSnapshot currentConfig = config;
             long now = System.currentTimeMillis();
+            Map<String, BigDecimal> startingBalances = new HashMap<>();
+            for (CurrencyDefinition currency : currentConfig.currencies().all()) {
+                startingBalances.put(currency.id(), currency.startingBalance());
+            }
             AccountRecord record = new AccountRecord(
                     id,
                     validatedName,
                     currentConfig.currencyId(),
-                    Map.of(currentConfig.currencyId(), currentConfig.startingBalance()),
+                    startingBalances,
                     now,
                     now);
             record.markDirty();
@@ -544,6 +548,10 @@ public class AccountService {
     public BigDecimal getStartingBalance() { return config.startingBalance(); }
     public BigDecimal getMaxBalance() { return config.maxBalance(); }
     public boolean hasCurrency(String currencyId) { return resolveCurrency(currencyId) != null; }
+    public @Nullable String getCanonicalCurrencyId(String currencyId) {
+        CurrencyDefinition currency = resolveCurrency(currencyId);
+        return currency != null ? currency.id() : null;
+    }
     public List<String> getCurrencyIds() { return config.currencies().all().stream().map(CurrencyDefinition::id).toList(); }
     public String getCurrencySingular(String currencyId) {
         CurrencyDefinition currency = resolveCurrency(currencyId);

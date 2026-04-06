@@ -112,11 +112,10 @@ public class JdbcAccountRepository implements AccountRepository {
     public synchronized List<AccountRecord> loadAll() throws SQLException {
         Map<UUID, AccountRecord> result = new LinkedHashMap<>();
         try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery("SELECT id,name,balance,created_at,updated_at,frozen FROM accounts")) {
+             ResultSet rs = stmt.executeQuery("SELECT id,name,created_at,updated_at,frozen FROM accounts")) {
             while (rs.next()) {
                 UUID id = UUID.fromString(rs.getString("id"));
                 String name = rs.getString("name");
-                BigDecimal balance = rs.getBigDecimal("balance");
                 long createdAt = rs.getLong("created_at");
                 long updatedAt = rs.getLong("updated_at");
                 boolean frozen = rs.getBoolean("frozen");
@@ -124,7 +123,7 @@ public class JdbcAccountRepository implements AccountRepository {
                         id,
                         name,
                         defaultCurrencyId,
-                        Map.of(defaultCurrencyId, balance),
+                        Map.of(defaultCurrencyId, BigDecimal.ZERO),
                         createdAt,
                         updatedAt);
                 rec.setFrozen(frozen);
@@ -253,16 +252,15 @@ public class JdbcAccountRepository implements AccountRepository {
     private void backfillDefaultBalances() throws SQLException {
         try (PreparedStatement selectAccounts = connection.prepareStatement(
                     "SELECT id,balance,updated_at FROM accounts");
-             PreparedStatement hasBalance = connection.prepareStatement(
-                    "SELECT 1 FROM account_balances WHERE account_id=? AND currency_id=?");
+             PreparedStatement hasAnyBalance = connection.prepareStatement(
+                    "SELECT 1 FROM account_balances WHERE account_id=?");
              PreparedStatement insertBalance = connection.prepareStatement(
                     "INSERT INTO account_balances(account_id,currency_id,balance,updated_at) VALUES(?,?,?,?)")) {
             try (ResultSet rs = selectAccounts.executeQuery()) {
                 while (rs.next()) {
                     String accountId = rs.getString("id");
-                    hasBalance.setString(1, accountId);
-                    hasBalance.setString(2, defaultCurrencyId);
-                    try (ResultSet existing = hasBalance.executeQuery()) {
+                    hasAnyBalance.setString(1, accountId);
+                    try (ResultSet existing = hasAnyBalance.executeQuery()) {
                         if (existing.next()) {
                             continue;
                         }

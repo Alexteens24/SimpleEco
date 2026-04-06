@@ -25,6 +25,9 @@ What this API is not:
 - an async-safe wrapper around the server thread model
 - a distributed ledger
 
+Methods without a `currencyId` parameter are the default-currency compatibility layer.
+Currency-aware overloads target the named currency directly.
+
 ## Getting The Service
 
 Add SimpleEco as a dependency in `plugin.yml`:
@@ -61,6 +64,7 @@ The API does not move your work onto a safe thread for you.
 These validations are enforced before business-rule evaluation:
 
 - `accountId`, `fromId`, `toId`, `amount`, and required names must not be `null`
+- currency-aware overloads require a non-blank, known `currencyId`
 - blank names are rejected
 - names longer than 16 characters are rejected
 - `TransactionMetadata.source` must be 64 characters or fewer when provided
@@ -129,6 +133,10 @@ This is useful for player-facing addons that want one call instead of separate c
 - `balance`
 - `createdAt`
 - `updatedAt`
+- `frozen`
+
+For `getAccount(...)` and `findByName(...)`, `balance` is the current default-currency balance.
+For currency-aware leaderboard overloads, `balance` is the requested currency balance.
 
 ### AccountOperationResult
 
@@ -186,17 +194,27 @@ switch (result.status()) {
 | Method | Result |
 |---|---|
 | `getBalance(UUID)` | `BigDecimal` |
+| `getBalance(UUID, String)` | `BigDecimal` |
 | `has(UUID, BigDecimal)` | `boolean` |
+| `has(UUID, String, BigDecimal)` | `boolean` |
 | `canDeposit(UUID, BigDecimal)` | `BalanceCheckResult` |
+| `canDeposit(UUID, String, BigDecimal)` | `BalanceCheckResult` |
 | `canWithdraw(UUID, BigDecimal)` | `BalanceCheckResult` |
+| `canWithdraw(UUID, String, BigDecimal)` | `BalanceCheckResult` |
 | `deposit(UUID, BigDecimal)` | `BalanceChangeResult` |
+| `deposit(UUID, String, BigDecimal)` | `BalanceChangeResult` |
 | `withdraw(UUID, BigDecimal)` | `BalanceChangeResult` |
+| `withdraw(UUID, String, BigDecimal)` | `BalanceChangeResult` |
 | `setBalance(UUID, BigDecimal)` | `BalanceChangeResult` |
+| `setBalance(UUID, String, BigDecimal)` | `BalanceChangeResult` |
 | `reset(UUID)` | `BalanceChangeResult` |
+| `reset(UUID, String)` | `BalanceChangeResult` |
 
 ### Semantics
 
 - `getBalance(UUID)` returns `0` when the account does not exist
+- methods without `currencyId` operate on the current default currency
+- currency-aware overloads operate on the requested currency
 - `has(UUID, BigDecimal)` is a convenience boolean and does not tell you why a check failed
 - `has(UUID, BigDecimal)` applies the configured currency precision before comparing balances; positive probe amounts that round to `0` return `false`
 - `canDeposit(...)` and `canWithdraw(...)` tell you whether the operation would succeed without mutating state
@@ -216,10 +234,12 @@ Fields:
 Possible statuses:
 
 - `ALLOWED`
+- `UNKNOWN_CURRENCY`
 - `ACCOUNT_NOT_FOUND`
 - `INVALID_AMOUNT`
 - `INSUFFICIENT_FUNDS`
 - `BALANCE_LIMIT`
+- `FROZEN`
 
 ### BalanceChangeResult
 
@@ -233,10 +253,12 @@ Fields:
 Possible statuses:
 
 - `SUCCESS`
+- `UNKNOWN_CURRENCY`
 - `ACCOUNT_NOT_FOUND`
 - `INVALID_AMOUNT`
 - `INSUFFICIENT_FUNDS`
 - `BALANCE_LIMIT`
+- `FROZEN`
 - `CANCELLED`
 
 `CANCELLED` means another plugin cancelled the Bukkit event fired for the mutation.
@@ -258,8 +280,11 @@ return true;
 | Method | Result |
 |---|---|
 | `canTransfer(UUID, UUID, BigDecimal)` | `TransferCheckResult` |
+| `canTransfer(UUID, UUID, String, BigDecimal)` | `TransferCheckResult` |
 | `previewTransfer(UUID, UUID, BigDecimal)` | `TransferPreviewResult` |
+| `previewTransfer(UUID, UUID, String, BigDecimal)` | `TransferPreviewResult` |
 | `transfer(UUID, UUID, BigDecimal)` | `TransferResult` |
+| `transfer(UUID, UUID, String, BigDecimal)` | `TransferResult` |
 
 ### Semantics
 
@@ -298,6 +323,7 @@ Fields:
 Statuses:
 
 - `ALLOWED`
+- `UNKNOWN_CURRENCY`
 - `ACCOUNT_NOT_FOUND`
 - `INVALID_AMOUNT`
 - `INSUFFICIENT_FUNDS`
@@ -317,6 +343,7 @@ Fields:
 Statuses:
 
 - `SUCCESS`
+- `UNKNOWN_CURRENCY`
 - `COOLDOWN`
 - `INSUFFICIENT_FUNDS`
 - `ACCOUNT_NOT_FOUND`
@@ -325,6 +352,7 @@ Statuses:
 - `TOO_LOW`
 - `INVALID_AMOUNT`
 - `SELF_TRANSFER`
+- `FROZEN`
 
 Notes:
 
@@ -347,6 +375,7 @@ Fields:
 Statuses:
 
 - `ALLOWED`
+- `UNKNOWN_CURRENCY`
 - `COOLDOWN`
 - `INSUFFICIENT_FUNDS`
 - `ACCOUNT_NOT_FOUND`
@@ -354,6 +383,7 @@ Statuses:
 - `TOO_LOW`
 - `INVALID_AMOUNT`
 - `SELF_TRANSFER`
+- `FROZEN`
 
 Notes:
 
@@ -368,9 +398,13 @@ Notes:
 | Method | Result |
 |---|---|
 | `getHistory(UUID, int, int)` | `HistoryPage` |
+| `getHistory(UUID, String, int, int)` | `HistoryPage` |
 | `getHistory(UUID, int, int, HistoryFilter)` | `HistoryPage` |
+| `getHistory(UUID, String, int, int, HistoryFilter)` | `HistoryPage` |
 | `logCustomTransaction(UUID, BigDecimal, TransactionKind)` | `void` |
+| `logCustomTransaction(UUID, String, BigDecimal, TransactionKind)` | `void` |
 | `logCustomTransaction(UUID, BigDecimal, TransactionKind, TransactionMetadata)` | `void` |
+| `logCustomTransaction(UUID, String, BigDecimal, TransactionKind, TransactionMetadata)` | `void` |
 
 ### HistoryPage
 
@@ -394,6 +428,7 @@ Each history entry contains:
 - `kind`
 - `counterpartId`
 - `targetId`
+- `currencyId`
 - `amount`
 - `balanceBefore`
 - `balanceAfter`
@@ -419,6 +454,7 @@ Builder fields:
 - `kind(TransactionKind)`
 - `fromMs(long)`
 - `toMs(long)`
+- `currencyId(String)`
 
 Example:
 
@@ -439,6 +475,7 @@ Use this when your addon wants to write a history entry without changing an acco
 Rules:
 
 - account must exist
+- currency-aware overloads require a known currency id
 - amount must be positive
 - kind must not be `null`
 
@@ -476,12 +513,17 @@ When metadata is present, SimpleEco can render that history line as a custom ent
 | Method | Result |
 |---|---|
 | `getTopAccounts(int)` | `List<AccountSnapshot>` |
+| `getTopAccounts(int, String)` | `List<AccountSnapshot>` |
+| `getTopAccounts(int, int)` | `LeaderboardPage` |
+| `getTopAccounts(int, int, String)` | `LeaderboardPage` |
 | `getRankOf(UUID)` | `int` |
+| `getRankOf(UUID, String)` | `int` |
 | `getUUIDNameMap()` | `Map<UUID, String>` |
 
 Notes:
 
 - `getTopAccounts(limit)` returns immutable account snapshots ordered from richest to poorest
+- currency-aware leaderboard overloads return snapshots whose `balance` field matches the requested currency
 - `limit` must be `>= 0`
 - `getRankOf(UUID)` returns a 1-based rank, or `-1` if the account does not exist
 - `getUUIDNameMap()` returns an unmodifiable snapshot of known UUID to last-known name mappings
@@ -494,7 +536,11 @@ Notes:
 |---|---|
 | `getRules()` | `EconomyRulesSnapshot` |
 | `getCurrencyInfo()` | `CurrencyInfo` |
+| `getCurrencyInfo(String)` | `CurrencyInfo` |
+| `getCurrencies()` | `List<CurrencyInfo>` |
+| `hasCurrency(String)` | `boolean` |
 | `format(BigDecimal)` | `String` |
+| `format(BigDecimal, String)` | `String` |
 
 ### CurrencyInfo
 
@@ -522,7 +568,7 @@ Fields:
 
 Notes:
 
-- `currency` is the same data shape returned by `getCurrencyInfo()`
+- `currency` is the same data shape returned by `getCurrencyInfo()` for the current default currency
 - `payMinAmount` is `null` when no minimum is enforced
 - `historyRetentionDays` is normalized to `-1` when history is kept forever or pruning is disabled
 

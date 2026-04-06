@@ -423,9 +423,10 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
         if (limit == 0) {
             return List.of();
         }
-        return service.getBalTopSnapshot(requireKnownCurrency(currencyId)).stream()
+        String validatedCurrencyId = requireKnownCurrency(currencyId);
+        return service.getBalTopSnapshot(validatedCurrencyId).stream()
                 .limit(limit)
-                .map(SimpleEcoApiImpl::toAccountSnapshot)
+                .map(record -> toAccountSnapshot(record, record.getBalance(validatedCurrencyId)))
                 .toList();
     }
 
@@ -449,8 +450,9 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
     public LeaderboardPage getTopAccounts(int page, int pageSize, String currencyId) {
         int validatedPage = requirePositive(page, "page");
         int validatedPageSize = requirePositive(pageSize, "pageSize");
-        List<AccountSnapshot> all = service.getBalTopSnapshot(requireKnownCurrency(currencyId)).stream()
-                .map(SimpleEcoApiImpl::toAccountSnapshot)
+        String validatedCurrencyId = requireKnownCurrency(currencyId);
+        List<AccountSnapshot> all = service.getBalTopSnapshot(validatedCurrencyId).stream()
+            .map(record -> toAccountSnapshot(record, record.getBalance(validatedCurrencyId)))
                 .toList();
         int total = all.size();
         int totalPages = total == 0 ? 0 : (int) Math.ceil(total / (double) validatedPageSize);
@@ -610,10 +612,14 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
     }
 
     private static AccountSnapshot toAccountSnapshot(AccountRecord record) {
+        return toAccountSnapshot(record, record.getBalance());
+    }
+
+    private static AccountSnapshot toAccountSnapshot(AccountRecord record, BigDecimal balance) {
         return new AccountSnapshot(
                 record.getId(),
                 record.getLastKnownName(),
-                record.getBalance(),
+                balance,
                 record.getCreatedAt(),
                 record.getUpdatedAt(),
                 record.isFrozen());
@@ -697,10 +703,11 @@ public final class SimpleEcoApiImpl implements SimpleEcoApi {
 
     private String requireKnownCurrency(String currencyId) {
         Objects.requireNonNull(currencyId, "currencyId");
-        if (!service.hasCurrency(currencyId)) {
+        String validatedCurrencyId = service.getCanonicalCurrencyId(currencyId);
+        if (validatedCurrencyId == null) {
             throw new IllegalArgumentException("Unknown currency: " + currencyId);
         }
-        return currencyId;
+        return validatedCurrencyId;
     }
 
     private static BigDecimal requireNonNegativeAmount(BigDecimal amount) {
