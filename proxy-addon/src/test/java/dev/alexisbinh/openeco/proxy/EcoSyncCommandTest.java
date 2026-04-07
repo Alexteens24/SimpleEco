@@ -82,12 +82,10 @@ class EcoSyncCommandTest {
 
         ArgumentCaptor<byte[]> messages = ArgumentCaptor.forClass(byte[].class);
         verify(connection, times(2)).sendPluginMessage(eq(PlayerServerSwitchListener.CHANNEL), messages.capture());
-        List<String> decoded = messages.getAllValues().stream()
-                .map(bytes -> new String(bytes, StandardCharsets.UTF_8))
-                .toList();
+        List<byte[]> capturedMessages = messages.getAllValues();
 
-        assertEquals("flush " + playerId, decoded.get(0));
-        assertEquals("refresh " + playerId, decoded.get(1));
+        assertEquals("flush " + playerId, new String(capturedMessages.get(0), StandardCharsets.UTF_8));
+        assertEquals("refresh " + playerId, new String(capturedMessages.get(1), StandardCharsets.UTF_8));
         verify(source, times(2)).sendMessage(any(Component.class));
         verify(logger).info("Manual sync for {} ({}) completed on {}", "Alice", playerId, "survival");
     }
