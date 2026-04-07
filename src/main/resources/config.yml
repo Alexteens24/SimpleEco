@@ -1,17 +1,29 @@
-currency:
-  # Internal identifier used by VaultUnlocked multi-currency queries
-  id: "simpleeco"
-  name-singular: "Dollar"
-  name-plural: "Dollars"
-  # Number of decimal places (0–8)
-  decimal-digits: 2
-  # Balance given to new accounts
-  starting-balance: 0.00
-  # Maximum balance a player can hold (-1 = unlimited)
-  max-balance: -1
+currencies:
+  # Preferred multi-currency config. Existing servers may keep the legacy
+  # currency.* block; openeco still reads it for backwards compatibility.
+  default: openeco
+  definitions:
+    openeco:
+      name-singular: "Dollar"
+      name-plural: "Dollars"
+      # Number of decimal places (0-8)
+      decimal-digits: 2
+      # Balance given to new accounts
+      starting-balance: 0.00
+      # Maximum balance a player can hold (-1 = unlimited)
+      max-balance: -1
+
+# Legacy single-currency format is still accepted during the migration window.
+# currency:
+#   id: "openeco"
+#   name-singular: "Dollar"
+#   name-plural: "Dollars"
+#   decimal-digits: 2
+#   starting-balance: 0.00
+#   max-balance: -1
 
 storage:
-  # Backend to use: sqlite or h2
+  # Backend to use: sqlite, h2, mysql, mariadb, or postgresql
   # Changing backend or file name does not migrate existing data automatically.
   type: sqlite
   sqlite:
@@ -19,6 +31,28 @@ storage:
   h2:
     # File name (without extension); H2 appends .mv.db automatically
     file: economy
+  mysql:
+    host: localhost
+    port: 3306
+    database: openeco
+    username: root
+    password: ""
+    # Number of concurrent database connections (remote backends only)
+    pool-size: 10
+  mariadb:
+    host: localhost
+    port: 3306
+    database: openeco
+    username: root
+    password: ""
+    pool-size: 10
+  postgresql:
+    host: localhost
+    port: 5432
+    database: openeco
+    username: postgres
+    password: ""
+    pool-size: 10
 
 # Seconds between automatic background saves (values <= 0 are clamped to 1)
 # Lower values reduce worst-case data loss after a crash but increase write pressure.
@@ -43,6 +77,26 @@ history:
   # Transactions older than this will be deleted automatically once per day.
   retention-days: -1
 
+cross-server:
+  # Enable proxy-assisted account handoff sync for networks running multiple backend servers
+  # behind a Velocity or BungeeCord proxy that share the same remote database
+  # (MySQL / MariaDB / PostgreSQL only).
+  #
+  # When enabled:
+  #   - Each player's account is flushed to the shared database when they leave a backend.
+  #   - Each player's account is re-read from the shared database before they finish joining.
+  #   - The openeco:sync plugin messaging channel is registered so the optional
+  #     openeco-proxy Velocity addon can trigger targeted flush/refresh requests.
+  #
+  # This is a handoff sync, not a real-time distributed ledger:
+  #   - balances are not broadcast live to every backend
+  #   - simultaneous writes to the same account from multiple live servers are still unsafe
+  #   - SQLite and H2 are not supported for this mode
+  #
+  # Requires a restart to take effect after toggling.
+  # Do NOT enable this on single-server setups — it adds unnecessary DB round-trips.
+  enabled: false
+
 messages:
   no-permission: "<red>You don't have permission to do that."
   console-player-only: "<red>Console must specify a player name."
@@ -51,6 +105,7 @@ messages:
   account-name-conflict: "<red>Your economy account could not use the name <yellow><player><red> because it is already linked to another account. Contact an administrator."
   self-pay: "<red>You cannot pay yourself."
   insufficient-funds: "<red>Insufficient funds."
+  unknown-currency: "<red>The selected currency is not available right now."
   pay-balance-limit: "<red><player> has reached the maximum balance and cannot receive more money."
   pay-too-low: "<red>Minimum payment amount is <yellow><min><red>."
   pay-cancelled: "<red>The payment was cancelled by a plugin."
@@ -80,7 +135,7 @@ messages:
   eco-unfreeze-failed: "<red>Failed to unfreeze <yellow><player><red>'s account."
   account-frozen: "<red>This account is frozen and cannot perform transactions."
   eco-reset: "<green>Reset <yellow><player><green>'s balance to <yellow><balance><green>."
-  eco-reload: "<green>SimpleEco configuration reloaded."
+  eco-reload: "<green>openeco configuration reloaded."
   eco-rename: "<green>Renamed <yellow><old_name><green>'s account to <yellow><new_name><green>."
   eco-rename-name-in-use: "<red>The name <yellow><new_name><red> is already taken."
   eco-rename-invalid: "<red>Invalid name: <yellow><new_name><red>."

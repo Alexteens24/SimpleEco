@@ -1,6 +1,6 @@
 # Developer Guide
 
-This document is for contributors, maintainers, and plugin authors who need to understand how SimpleEco is built internally.
+This document is for contributors, maintainers, and plugin authors who need to understand how OpenEco is built internally.
 
 If you only run the plugin on a server, use the production and configuration docs instead.
 
@@ -20,27 +20,27 @@ For the public addon-facing contract, read [Addon API](api.md) alongside this fi
 
 | Path | Purpose |
 |---|---|
-| `src/main/java/dev/alexisbinh/simpleeco/SimpleEcoPlugin.java` | plugin bootstrap, service registration, scheduler startup, reload, shutdown |
-| `src/main/java/dev/alexisbinh/simpleeco/api/` | public immutable API, result types, snapshots, API exception |
-| `src/main/java/dev/alexisbinh/simpleeco/service/` | core business logic, registry, cache, history writer, config snapshot |
-| `src/main/java/dev/alexisbinh/simpleeco/storage/` | JDBC repository and dialect-specific schema/tuning |
-| `src/main/java/dev/alexisbinh/simpleeco/economy/` | VaultUnlocked v2 adapter and legacy Vault v1 adapter |
-| `src/main/java/dev/alexisbinh/simpleeco/command/` | Bukkit command handlers and tab completion |
-| `src/main/java/dev/alexisbinh/simpleeco/event/` | Bukkit events emitted by SimpleEco |
-| `src/main/java/dev/alexisbinh/simpleeco/listener/` | player join/quit sync logic |
-| `src/main/java/dev/alexisbinh/simpleeco/placeholder/` | PlaceholderAPI expansion |
-| `src/test/java/dev/alexisbinh/simpleeco/` | unit and integration tests by subsystem |
+| `src/main/java/dev/alexisbinh/openeco/OpenEcoPlugin.java` | plugin bootstrap, service registration, scheduler startup, reload, shutdown |
+| `src/main/java/dev/alexisbinh/openeco/api/` | public immutable API, result types, snapshots, API exception |
+| `src/main/java/dev/alexisbinh/openeco/service/` | core business logic, registry, cache, history writer, config snapshot |
+| `src/main/java/dev/alexisbinh/openeco/storage/` | JDBC repository and dialect-specific schema/tuning |
+| `src/main/java/dev/alexisbinh/openeco/economy/` | VaultUnlocked v2 adapter and legacy Vault v1 adapter |
+| `src/main/java/dev/alexisbinh/openeco/command/` | Bukkit command handlers and tab completion |
+| `src/main/java/dev/alexisbinh/openeco/event/` | Bukkit events emitted by OpenEco |
+| `src/main/java/dev/alexisbinh/openeco/listener/` | player join/quit sync logic |
+| `src/main/java/dev/alexisbinh/openeco/placeholder/` | PlaceholderAPI expansion |
+| `src/test/java/dev/alexisbinh/openeco/` | unit and integration tests by subsystem |
 
 ## Startup Lifecycle
 
-`SimpleEcoPlugin.onEnable()` follows this order:
+`OpenEcoPlugin.onEnable()` follows this order:
 
 1. Save default config.
 2. Resolve storage backend and database filename.
 3. Open `JdbcAccountRepository` and create schema if needed.
 4. Create `AccountService` and load all accounts into memory.
 5. Load message templates.
-6. Register the public `SimpleEcoApi` service.
+6. Register the public `OpenEcoApi` service.
 7. Register VaultUnlocked v2 and legacy Vault v1 providers.
 8. Register commands, listeners, and optional PlaceholderAPI expansion.
 9. Start autosave and history prune schedulers.
@@ -53,7 +53,7 @@ If storage open or initial account load fails, the plugin disables itself early.
 
 ## Runtime Model
 
-SimpleEco is an in-memory economy with local persistence.
+OpenEco is an in-memory economy with a single-JVM authority and JDBC persistence.
 
 - All account rows are loaded into memory at startup.
 - Live account state is held inside `AccountRegistry`.
@@ -63,7 +63,10 @@ SimpleEco is an in-memory economy with local persistence.
 - Before a dirty balance batch is persisted, older queued history writes are drained so the persisted balance snapshot does not outrun its audit trail.
 - Baltop is cached with a TTL and stored as frozen account snapshots.
 
-This design optimizes same-server latency and keeps storage logic simple, but it is not a shared-database or multi-JVM design.
+Storage can be local SQLite/H2 or remote MySQL/MariaDB/PostgreSQL.
+There is also an optional proxy-assisted handoff mode that re-reads and flushes player accounts during server transfers.
+
+This design optimizes same-server latency first. Even with proxy-assisted handoff enabled, it is not a real-time distributed ledger or a safe multi-writer design for the same account.
 
 ## Main Components
 
@@ -116,15 +119,16 @@ If you add a new mutation that should appear in history, keep the write path con
 
 Important details:
 
-- SQLite and H2 are both supported.
+- SQLite, H2, MySQL, MariaDB, and PostgreSQL are supported.
 - SQLite uses a case-insensitive name index based on `LOWER(name)`.
 - H2 uses a plain name index because the SQLite expression index is not portable there.
+- remote backends are used directly through HikariCP
 - account deletes also delete that account's transaction rows.
 - filtered history queries are built centrally to keep pagination and counting aligned.
 
 ## Threading Rules
 
-SimpleEco is not a free-threaded API.
+OpenEco is not a free-threaded API.
 
 - Call mutating logic from a safe server context.
 - On Paper, that means the normal server thread.
@@ -149,7 +153,7 @@ These rules are relied on across commands, Vault bridges, and the public API.
 - blank names are rejected
 - names longer than 16 characters are rejected
 - names are unique case-insensitively
-- legacy Vault v1 string lookups resolve through SimpleEco's internal name mapping rather than inventing UUIDs
+- legacy Vault v1 string lookups resolve through OpenEco's internal name mapping rather than inventing UUIDs
 
 ### Money rules
 
@@ -163,7 +167,8 @@ These rules are relied on across commands, Vault bridges, and the public API.
 
 ### Cache and persistence rules
 
-- any create, delete, or balance mutation must invalidate the baltop cache
+- any account create, rename, or delete must invalidate the baltop cache immediately
+- balance mutations do not eagerly invalidate the baltop cache; the cache expires naturally on its configured TTL
 - cached leaderboard entries must be immutable snapshots, not live records
 - deleting an account must not race pending history writes; the service waits for the history queue to drain before deleting persisted rows
 
@@ -171,13 +176,13 @@ If a change breaks one of these assumptions, commands, Vault bridges, placeholde
 
 ## Integration Surfaces
 
-SimpleEco exposes three main integration paths.
+OpenEco exposes three main integration paths.
 
 ### Public addon API
 
 Preferred for same-server plugin integrations.
 
-- type: `SimpleEcoApi`
+- type: `OpenEcoApi`
 - registration: Bukkit `ServicesManager`
 - contract: immutable snapshots and plugin-native result objects
 
@@ -187,8 +192,8 @@ Use this path when you own both sides of the integration or need the richest con
 
 Compatibility layer for existing economy plugins.
 
-- `SimpleEcoEconomyProvider` implements VaultUnlocked v2
-- `SimpleEcoLegacyEconomyProvider` implements legacy Vault v1
+- `OpenEcoEconomyProvider` implements VaultUnlocked v2
+- `OpenEcoLegacyEconomyProvider` implements legacy Vault v1
 
 When you change money rules, keep both providers behaviorally aligned with the core service.
 
@@ -232,7 +237,7 @@ Notes:
 
 ## Test Strategy
 
-Tests are grouped by subsystem under `src/test/java/dev/alexisbinh/simpleeco/`.
+Tests are grouped by subsystem under `src/test/java/dev/alexisbinh/openeco/`.
 
 Current coverage focuses on:
 
@@ -265,8 +270,8 @@ If you are new to the codebase, start from one of these files depending on what 
 - money logic: `service/EconomyOperations.java`
 - account lifecycle: `service/AccountService.java`
 - persistence and SQL: `storage/JdbcAccountRepository.java`
-- plugin boot and registration: `SimpleEcoPlugin.java`
-- addon integration contract: `api/SimpleEcoApi.java` and `docs/api.md`
-- compatibility adapters: `economy/SimpleEcoEconomyProvider.java` and `economy/SimpleEcoLegacyEconomyProvider.java`
+- plugin boot and registration: `OpenEcoPlugin.java`
+- addon integration contract: `api/OpenEcoApi.java` and `docs/api.md`
+- compatibility adapters: `economy/OpenEcoEconomyProvider.java` and `economy/OpenEcoLegacyEconomyProvider.java`
 
 That is usually enough to find the real call path without having to scan the entire plugin first.

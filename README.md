@@ -1,21 +1,25 @@
-# SimpleEco
+# OpenEco
 
-[![CI](https://github.com/Alexteens24/SimpleEco/actions/workflows/ci.yml/badge.svg)](https://github.com/Alexteens24/SimpleEco/actions/workflows/ci.yml)
+[![CI](https://github.com/Alexteens24/OpenEco/actions/workflows/ci.yml/badge.svg)](https://github.com/Alexteens24/OpenEco/actions/workflows/ci.yml)
 
-SimpleEco is an economy plugin for one Paper or Folia server.
+OpenEco is a single-server-first economy plugin for Paper or Folia.
+
+It keeps account state in memory for fast local use, and can optionally do proxy-assisted account handoff sync when you run multiple backend servers against one shared remote database.
 
 What it does:
 
 - Keeps balances in memory for fast reads and writes.
-- Stores data locally in SQLite or H2 under `plugins/SimpleEco/`.
+- Stores data in SQLite, H2, MySQL, MariaDB, or PostgreSQL.
+- Supports multiple named currencies with a configurable default-currency compatibility layer.
 - Exposes Vault v1 and VaultUnlocked v2 economy providers.
 - Supports PlaceholderAPI if it is installed.
+- Offers optional cross-server handoff sync for shared remote databases when paired with the Velocity proxy addon.
 
 What it does not do:
 
-- Cross-server or proxy-wide balance sync.
 - Automatic migration between storage backends or file names.
-- Shared database access across multiple JVMs.
+- Real-time distributed balance broadcasts to every backend server.
+- Safe simultaneous writes to the same account from multiple live backends without controlled player handoff.
 
 ## Requirements
 
@@ -24,37 +28,50 @@ What it does not do:
 - [VaultUnlocked](https://github.com/TheNewEconomy/VaultUnlocked)
 - [PlaceholderAPI](https://placeholderapi.com/) if you want placeholders
 
-VaultUnlocked is loaded by Paper as plugin `Vault`. SimpleEco depends on that runtime name.
+VaultUnlocked is loaded by Paper as plugin `Vault`. OpenEco depends on that runtime name.
 
 ## Install
 
-1. Put `SimpleEco-<version>.jar` in `plugins/`.
+1. Put `OpenEco-<version>.jar` in `plugins/`.
 2. Install VaultUnlocked.
-3. Start the server once to generate `plugins/SimpleEco/config.yml`.
+3. Start the server once to generate `plugins/OpenEco/config.yml`.
 4. Stop the server and review the config.
-5. Back up `plugins/SimpleEco/` before opening the server.
+5. Back up `plugins/OpenEco/` before opening the server.
 6. Start the server again and verify `/balance`, `/baltop`, and `/history`.
+
+## Network Mode
+
+For multi-backend networks:
+
+1. Use MySQL, MariaDB, or PostgreSQL.
+2. Enable `cross-server.enabled: true` on every backend.
+3. Install the `proxy-addon` jar on Velocity.
+4. Restart the proxy and all backend servers.
+
+This mode is for player handoff between backends. It is not a real-time distributed ledger.
 
 ## Commands
 
 | Command | Use | Permission |
 |---|---|---|
-| `/balance [player]` | Check balance | `simpleeco.command.balance` |
-| `/baltop [page]` | View leaderboard | `simpleeco.command.baltop` |
-| `/pay <player> <amount>` | Send money | `simpleeco.command.pay` |
-| `/eco give <player> <amount>` | Give money | `simpleeco.command.eco.give` |
-| `/eco take <player> <amount>` | Take money | `simpleeco.command.eco.take` |
-| `/eco set <player> <amount>` | Set balance | `simpleeco.command.eco.set` |
-| `/eco reset <player>` | Reset to starting balance | `simpleeco.command.eco.reset` |
-| `/eco delete <player>` | Delete an account and that account's history | `simpleeco.command.eco.delete` |
-| `/eco reload` | Reload config and messages | `simpleeco.command.eco.reload` |
-| `/history [player] [page]` | View transaction history | `simpleeco.command.history` |
+| `/balance [player] [currency]` | Check balance | `openeco.command.balance` |
+| `/baltop [page] [currency]` | View leaderboard | `openeco.command.baltop` |
+| `/pay <player> <amount> [currency]` | Send money | `openeco.command.pay` |
+| `/eco give <player> <amount> [currency]` | Give money | `openeco.command.eco.give` |
+| `/eco take <player> <amount> [currency]` | Take money | `openeco.command.eco.take` |
+| `/eco set <player> <amount> [currency]` | Set balance | `openeco.command.eco.set` |
+| `/eco reset <player> [currency]` | Reset to starting balance | `openeco.command.eco.reset` |
+| `/eco delete <player>` | Delete an account and that account's history | `openeco.command.eco.delete` |
+| `/eco reload` | Reload config and messages | `openeco.command.eco.reload` |
+| `/history [player] [page] [currency]` | View transaction history | `openeco.command.history` |
 
-`simpleeco.admin` grants all admin permissions.
+`openeco.admin` grants all admin permissions.
 
 ## Owner Notes
 
-- SimpleEco is meant for one server with local storage.
+- OpenEco is meant for one server with local storage.
+- Network mode is opt-in and meant for player handoff over a shared remote database, not for general multi-writer sharing.
+- New configs should use `currencies.default` and `currencies.definitions.*`; the legacy `currency.*` block is still read for backward compatibility.
 - SQLite companion files such as `economy.db-wal` and `economy.db-shm` are normal while the server is running.
 - Balance data is flushed periodically and on normal shutdown.
 - History can be kept forever or pruned with `history.retention-days`.
@@ -68,6 +85,7 @@ VaultUnlocked is loaded by Paper as plugin `Vault`. SimpleEco depends on that ru
 - [PlaceholderAPI](docs/placeholders.md)
 - [Addon API](docs/api.md)
 - [Technical Notes](docs/technical.md)
+- [Proxy Addon](proxy-addon/README.md)
 
 ## Build From Source
 
@@ -75,7 +93,7 @@ VaultUnlocked is loaded by Paper as plugin `Vault`. SimpleEco depends on that ru
 ./gradlew build
 ```
 
-Output: `build/libs/SimpleEco-<version>.jar`
+Output: `build/libs/OpenEco-<version>.jar`
 
 ## License
 

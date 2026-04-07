@@ -4,26 +4,29 @@ This file is for owners who want the operational details behind the plugin.
 
 ## Runtime Model
 
-SimpleEco keeps account data in memory and writes it to local storage in the background.
+OpenEco keeps account data in memory and writes it through JDBC in the background.
 
 Hot path callers include:
 
 - player commands
 - Vault v1 plugins
 - VaultUnlocked v2 plugins
-- addons using the SimpleEco API
+- addons using the OpenEco API
 
 Balance reads and writes do not need a database round trip. Dirty account snapshots are flushed on the autosave interval and on normal shutdown.
 
 Transaction history is written on a dedicated single-thread executor.
-Before a dirty balance batch is persisted, SimpleEco waits for older queued history writes so persisted balances do not outrun their recorded audit trail.
+Before a dirty balance batch is persisted, OpenEco waits for older queued history writes so persisted balances do not outrun their recorded audit trail.
+
+The default shape is still single-server-first. An optional proxy-assisted handoff mode can flush and refresh accounts across backend transfers when every backend shares one remote database.
 
 ## Storage
 
-- Storage is local SQLite or H2 under `plugins/SimpleEco/`.
+- Storage can be local SQLite or H2 under `plugins/OpenEco/`, or remote MySQL / MariaDB / PostgreSQL.
 - SQLite uses WAL mode.
 - `economy.db-wal` and `economy.db-shm` are normal while SQLite is active.
 - Deleting rows does not guarantee that the SQLite file shrinks immediately.
+- Proxy-assisted handoff mode requires a remote backend; SQLite and H2 are local-only.
 
 ## History
 
@@ -40,7 +43,8 @@ Before a dirty balance batch is persisted, SimpleEco waits for older queued hist
 
 ## Scaling Notes
 
-- SimpleEco is designed for one server.
+- OpenEco is designed around one active server authority per account.
+- Proxy-assisted handoff can work across backend servers, but it is not real-time global replication.
 - Large account counts increase startup load time and leaderboard work.
 - `/pay`, `/baltop`, and name tab-complete are the most obvious features to feel account-count growth.
 - Large history volumes can dominate file size before account rows do.

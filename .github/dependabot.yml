@@ -1,0 +1,28 @@
+version: 2
+
+updates:
+  - package-ecosystem: "gradle"
+    directories:
+      - "/"
+      - "/enhancements-addon"
+      - "/proxy-addon"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "08:00"
+      timezone: "Asia/Ho_Chi_Minh"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    pull-request-branch-name:
+      separator: "-"
+    groups:
+      gradle-dependencies:
+        patterns:
+          - "*"
+        exclude-patterns:
+          - "io.papermc.paper:paper-api"
+        group-by: "dependency-name"
+    ignore:
+      - dependency-name: "io.papermc.paper:paper-api"
