@@ -14,7 +14,7 @@ import java.util.UUID;
  * Cancelling this event prevents the change from taking effect.
  * Not fired for /pay — use {@link PayEvent} for that.
  *
- * <p><strong>Threading note:</strong> This event is dispatched outside OpenEco's
+ * <p><strong>Threading note:</strong> This event is dispatched outside openeco's
  * internal locks. The old and new balance fields describe the proposed change at dispatch
  * time. If another operation races before the mutation is committed, the actual applied
  * balances may differ; {@link BalanceChangedEvent} is the authoritative post-commit state.

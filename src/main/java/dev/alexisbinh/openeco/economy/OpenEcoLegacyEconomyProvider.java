@@ -17,7 +17,7 @@ import java.util.function.Function;
 /**
  * Legacy Vault v1 Economy adapter.
  * Some plugins (e.g. ShopGUI+, SmartSpawner) query {@code net.milkbowl.vault.economy.Economy}
- * via the Bukkit ServicesManager. This adapter bridges them to OpenEco's AccountService.
+ * via the Bukkit ServicesManager. This adapter bridges them to openeco's AccountService.
  */
 @SuppressWarnings("deprecation")
 public class OpenEcoLegacyEconomyProvider implements Economy {
@@ -38,7 +38,7 @@ public class OpenEcoLegacyEconomyProvider implements Economy {
     // ── Basic info ────────────────────────────────────────────────────────────
 
     @Override public boolean isEnabled() { return true; }
-    @Override public String getName() { return "OpenEco"; }
+    @Override public String getName() { return "openeco"; }
     @Override public boolean hasBankSupport() { return false; }
     @Override public int fractionalDigits() { return service.getFractionalDigits(); }
     @Override public String format(double amount) { return service.format(BigDecimal.valueOf(amount)); }

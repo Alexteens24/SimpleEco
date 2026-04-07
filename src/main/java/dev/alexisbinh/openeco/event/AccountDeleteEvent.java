@@ -12,7 +12,7 @@ import java.util.UUID;
  * Fired before an economy account is removed from the in-memory store.
  * Cancelling this event aborts the deletion.
  *
- * <p><strong>Threading note:</strong> This event is dispatched outside OpenEco's
+ * <p><strong>Threading note:</strong> This event is dispatched outside openeco's
  * internal locks. The name and balance fields are a snapshot of the delete attempt at
  * dispatch time. If another operation changes the account before deletion is committed,
  * the final stored state may differ.

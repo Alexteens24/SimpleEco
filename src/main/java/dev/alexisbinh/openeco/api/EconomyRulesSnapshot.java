@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import java.math.BigDecimal;
 
 /**
- * Immutable snapshot of the current operational rules exposed by OpenEco.
+ * Immutable snapshot of the current operational rules exposed by openeco.
  */
 public record EconomyRulesSnapshot(
         CurrencyInfo currency,

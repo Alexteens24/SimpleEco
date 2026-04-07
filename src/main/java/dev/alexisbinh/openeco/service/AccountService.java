@@ -675,14 +675,14 @@ public class AccountService {
             String sanitized = sanitizeAccountName(record.getLastKnownName());
             if (sanitized == null || !sanitized.equals(record.getLastKnownName())) {
                 throw new SQLException("Invalid stored account name for " + record.getId()
-                        + ": '" + record.getLastKnownName() + "'. Resolve invalid names before starting OpenEco.");
+                        + ": '" + record.getLastKnownName() + "'. Resolve invalid names before starting openeco.");
             }
 
             String normalized = AccountRegistry.normalizeName(record.getLastKnownName());
             UUID existingOwner = owners.putIfAbsent(normalized, record.getId());
             if (existingOwner != null && !existingOwner.equals(record.getId())) {
                 throw new SQLException("Duplicate stored account name '" + record.getLastKnownName() + "' for "
-                        + existingOwner + " and " + record.getId() + ". Resolve duplicates before starting OpenEco.");
+                        + existingOwner + " and " + record.getId() + ". Resolve duplicates before starting openeco.");
             }
         }
     }

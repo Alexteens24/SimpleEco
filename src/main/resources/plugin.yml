@@ -1,6 +1,6 @@
-name: OpenEco
+name: openeco
 version: "${version}"
-main: dev.alexisbinh.openeco.OpenEcoPlugin
+main: dev.alexisbinh.openeco.openecoPlugin
 description: "Just a simple economy plugin"
 api-version: '1.20'
 folia-supported: true
@@ -79,7 +79,7 @@ permissions:
     description: Set a player's balance
     default: op
   openeco.command.eco.reload:
-    description: Reload OpenEco configuration
+    description: Reload openeco configuration
     default: op
   openeco.command.eco.reset:
     description: Reset a player's balance to starting balance

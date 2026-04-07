@@ -11,7 +11,7 @@ import java.util.UUID;
  * Fired before an account name change is committed to the in-memory store.
  * Cancelling this event aborts the rename.
  *
- * <p><strong>Threading note:</strong> This event is dispatched outside OpenEco's
+ * <p><strong>Threading note:</strong> This event is dispatched outside openeco's
  * internal locks. The name fields describe the rename attempt that was evaluated at
  * dispatch time. If another operation races before the rename is committed, the final
  * stored name may differ; the post-mutation account snapshot is authoritative.

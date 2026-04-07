@@ -13,7 +13,7 @@ import java.util.UUID;
  * Fired before a /pay transaction is processed.
  * Cancelling this event aborts the transfer entirely.
  *
- * <p><strong>Threading note:</strong> This event is dispatched outside OpenEco's internal
+ * <p><strong>Threading note:</strong> This event is dispatched outside openeco's internal
  * locks. The transfer is revalidated when it is committed, so other concurrent operations can
  * still make the pay fail after this event if balances, cooldown, or limits change first.
  */

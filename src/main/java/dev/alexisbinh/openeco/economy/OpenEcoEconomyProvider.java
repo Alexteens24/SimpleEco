@@ -19,7 +19,7 @@ public class OpenEcoEconomyProvider implements Economy {
     // ── Basic info ────────────────────────────────────────────────────────────
 
     @Override public boolean isEnabled() { return true; }
-    @Override public String getName() { return "OpenEco"; }
+    @Override public String getName() { return "openeco"; }
     @Override public boolean hasSharedAccountSupport() { return false; }
     @Override public boolean hasMultiCurrencySupport() { return true; }
 

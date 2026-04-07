@@ -12,8 +12,8 @@ import java.util.UUID;
  * Not cancellable — the account has already been added to the in-memory store.
  *
  * <p><strong>Threading note:</strong> This event is dispatched after the account has been
- * committed to the in-memory store and outside OpenEco's internal locks. Listeners may
- * call other OpenEco operations synchronously, subject to the normal server-thread rules.
+ * committed to the in-memory store and outside openeco's internal locks. Listeners may
+ * call other openeco operations synchronously, subject to the normal server-thread rules.
  */
 public class AccountCreateEvent extends Event {
 

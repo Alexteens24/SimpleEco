@@ -78,7 +78,7 @@ public class OpenEcoPlugin extends JavaPlugin {
         api = new OpenEcoApiImpl(service);
         getServer().getServicesManager().register(
             OpenEcoApi.class, api, this, ServicePriority.Normal);
-        getLogger().info("Registered OpenEco addon API service.");
+        getLogger().info("Registered openeco addon API service.");
 
         // ── VaultUnlocked registration ────────────────────────────────────────
         OpenEcoEconomyProvider provider = new OpenEcoEconomyProvider(service);
@@ -125,7 +125,7 @@ public class OpenEcoPlugin extends JavaPlugin {
         // ── bStats ────────────────────────────────────────────────────────────
         new Metrics(this, 30556);
 
-        getLogger().info("OpenEco enabled. Backend: " + dialect.name().toLowerCase()
+        getLogger().info("openeco enabled. Backend: " + dialect.name().toLowerCase()
                 + " | Accounts loaded: true");
     }
 
@@ -214,6 +214,6 @@ public class OpenEcoPlugin extends JavaPlugin {
                 getLogger().severe("Failed to close database: " + e.getMessage());
             }
         }
-        getLogger().info("OpenEco disabled.");
+        getLogger().info("openeco disabled.");
     }
 }
