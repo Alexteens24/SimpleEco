@@ -15,7 +15,6 @@ abstract class VaultJvmFix : ComponentMetadataRule {
 
 plugins {
     java
-    id("com.gradleup.shadow") version "9.4.1"
 }
 
 group = "dev.alexisbinh"
@@ -36,24 +35,29 @@ repositories {
 
 dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    compileOnly("net.cfh.vault:VaultUnlocked:2.19.1")
-    compileOnly("me.clip:placeholderapi:2.12.2")
+    compileOnly("net.cfh.vault:VaultUnlocked:2.19.0")
+    compileOnly("me.clip:placeholderapi:2.11.6")
     compileOnly("org.xerial:sqlite-jdbc:3.51.3.0")
     compileOnly("com.h2database:h2:2.4.240")
-    implementation("org.bstats:bstats-bukkit:3.2.1")
-    implementation("com.zaxxer:HikariCP:7.0.2")
-    implementation("com.mysql:mysql-connector-j:9.6.0") {
+    compileOnly("org.bstats:bstats-bukkit:3.2.1")
+    compileOnly("com.zaxxer:HikariCP:7.0.2")
+    compileOnly("com.mysql:mysql-connector-j:9.6.0") {
         exclude(group = "com.google.protobuf") // only needed for X Protocol (mysqlx://), not standard JDBC
     }
-    implementation("org.mariadb.jdbc:mariadb-java-client:3.5.8")
-    implementation("org.postgresql:postgresql:42.7.10")
+    compileOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
+    compileOnly("org.postgresql:postgresql:42.7.10")
 
-    testImplementation(platform("org.junit:junit-bom:6.0.3"))
+    testImplementation(platform("org.junit:junit-bom:5.12.2"))
     testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.mockito:mockito-junit-jupiter:5.23.0")
+    testImplementation("org.mockito:mockito-junit-jupiter:5.16.1")
     testImplementation("io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT")
-    testImplementation("net.cfh.vault:VaultUnlocked:2.19.1")
-    testImplementation("me.clip:placeholderapi:2.12.2")
+    testImplementation("net.cfh.vault:VaultUnlocked:2.19.0")
+    testImplementation("me.clip:placeholderapi:2.11.6")
+    testImplementation("com.zaxxer:HikariCP:7.0.2")
+    testRuntimeOnly("org.bstats:bstats-bukkit:3.2.1")
+    testRuntimeOnly("com.mysql:mysql-connector-j:9.6.0")
+    testRuntimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.8")
+    testRuntimeOnly("org.postgresql:postgresql:42.7.10")
     testRuntimeOnly("com.h2database:h2:2.4.240")
     testRuntimeOnly("org.xerial:sqlite-jdbc:3.51.3.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
@@ -70,16 +74,6 @@ tasks.test {
 
 tasks.compileJava {
     options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:unchecked"))
-}
-
-tasks.shadowJar {
-    archiveClassifier.set("")
-    relocate("org.bstats", "${project.group}.libs.bstats")
-    relocate("com.zaxxer.hikari", "${project.group}.libs.hikari")
-}
-
-tasks.build {
-    dependsOn(tasks.shadowJar)
 }
 
 tasks.processResources {

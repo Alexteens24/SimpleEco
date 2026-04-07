@@ -226,12 +226,11 @@ Useful commands:
 
 ```bash
 ./gradlew test
-./gradlew shadowJar
 ```
 
 Notes:
 
-- the root build produces the shaded plugin jar
+- the root build produces the standard plugin jar; runtime libraries are loaded through the `libraries:` section in `plugin.yml`
 - the build patches VaultUnlocked module metadata back to Java 21 because the published metadata currently reports a higher target JVM than this project uses
 - a local `stress-addon/` module can exist in private workspaces, but the public repo builds without it because `settings.gradle.kts` includes it only when the directory exists
 
