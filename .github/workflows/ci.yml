@@ -47,15 +47,18 @@ jobs:
       - name: Make Gradle wrapper executable
         run: chmod +x ./gradlew
 
-      - name: Build project
-        run: ./gradlew --no-daemon build
+      - name: Build project and addons
+        run: ./gradlew --no-daemon build :enhancements-addon:build :proxy-addon:build
 
-      - name: Upload plugin jar
+      - name: Upload plugin jars
         if: success()
         uses: actions/upload-artifact@v4.6.2
         with:
-          name: openeco-jar
-          path: build/libs/*.jar
+          name: openeco-jars
+          path: |
+            build/libs/*.jar
+            enhancements-addon/build/libs/*.jar
+            proxy-addon/build/libs/*.jar
           if-no-files-found: error
 
       - name: Upload test reports
@@ -66,4 +69,8 @@ jobs:
           path: |
             build/reports/tests/test/**
             build/test-results/test/**
+            enhancements-addon/build/reports/tests/test/**
+            enhancements-addon/build/test-results/test/**
+            proxy-addon/build/reports/tests/test/**
+            proxy-addon/build/test-results/test/**
           if-no-files-found: warn
