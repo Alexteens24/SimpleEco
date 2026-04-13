@@ -286,6 +286,9 @@ final class EconomyOperations {
 
             BigDecimal before = record.getBalance(currency.id());
             previewBalance = before;
+            if (record.isFrozen()) {
+                return failure(scaled, before, "Account is frozen");
+            }
             if (currency.maxBalance() != null && scaled.compareTo(currency.maxBalance()) > 0) {
                 return failure(scaled, before, "Balance limit reached");
             }
@@ -305,6 +308,9 @@ final class EconomyOperations {
             }
 
             BigDecimal before = record.getBalance(currency.id());
+            if (record.isFrozen()) {
+                return failure(scaled, before, "Account is frozen");
+            }
             if (currency.maxBalance() != null && scaled.compareTo(currency.maxBalance()) > 0) {
                 return failure(scaled, before, "Balance limit reached");
             }
@@ -345,6 +351,9 @@ final class EconomyOperations {
 
             BigDecimal before = record.getBalance(currency.id());
             previewBalance = before;
+            if (record.isFrozen()) {
+                return failure(BigDecimal.ZERO, before, "Account is frozen");
+            }
             event = new BalanceChangeEvent(id, before, startingBalance, BalanceChangeEvent.Reason.RESET, currency.id());
         }
 
@@ -360,6 +369,9 @@ final class EconomyOperations {
             }
 
             BigDecimal before = record.getBalance(currency.id());
+            if (record.isFrozen()) {
+                return failure(BigDecimal.ZERO, before, "Account is frozen");
+            }
             record.setBalance(currency.id(), startingBalance);
             transactionLogger.accept(new TransactionEntry(
                     TransactionType.RESET, null, id, startingBalance, before, startingBalance,
