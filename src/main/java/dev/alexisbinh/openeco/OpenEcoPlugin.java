@@ -137,8 +137,12 @@ public class OpenEcoPlugin extends JavaPlugin {
         // ── History prune scheduler ───────────────────────────────────────────
         restartPruneTask();
 
-        // ── bStats ────────────────────────────────────────────────────────────
-        new Metrics(this, 30556);
+        // ── bStats (optional) ────────────────────────────────────────────────
+        try {
+            new Metrics(this, 30556);
+        } catch (IllegalStateException | LinkageError ex) {
+            getLogger().warning("bStats metrics disabled: " + ex.getMessage());
+        }
 
         getLogger().info("openeco enabled. Backend: " + dialect.name().toLowerCase()
                 + " | Accounts loaded: true");

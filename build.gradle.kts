@@ -1,6 +1,7 @@
 import org.gradle.api.artifacts.ComponentMetadataContext
 import org.gradle.api.artifacts.ComponentMetadataRule
 import org.gradle.api.attributes.java.TargetJvmVersion
+import com.gradleup.shadow.tasks.ShadowJar
 
 // VaultUnlocked 2.19.0 module metadata declares jvmCompatibility=25 — patch it back to 21
 abstract class VaultJvmFix : ComponentMetadataRule {
@@ -15,6 +16,7 @@ abstract class VaultJvmFix : ComponentMetadataRule {
 
 plugins {
     java
+    id("com.gradleup.shadow") version "9.4.1"
 }
 
 group = "dev.alexisbinh"
@@ -39,7 +41,7 @@ dependencies {
     compileOnly("me.clip:placeholderapi:2.12.2")
     compileOnly("org.xerial:sqlite-jdbc:3.51.3.0")
     compileOnly("com.h2database:h2:2.4.240")
-    compileOnly("org.bstats:bstats-bukkit:3.2.1")
+    implementation("org.bstats:bstats-bukkit:3.2.1")
     compileOnly("com.zaxxer:HikariCP:7.0.2")
     compileOnly("com.mysql:mysql-connector-j:9.6.0") {
         exclude(group = "com.google.protobuf") // only needed for X Protocol (mysqlx://), not standard JDBC
@@ -54,7 +56,6 @@ dependencies {
     testImplementation("net.cfh.vault:VaultUnlocked:2.19.1")
     testImplementation("me.clip:placeholderapi:2.12.2")
     testImplementation("com.zaxxer:HikariCP:7.0.2")
-    testRuntimeOnly("org.bstats:bstats-bukkit:3.2.1")
     testRuntimeOnly("com.mysql:mysql-connector-j:9.6.0")
     testRuntimeOnly("org.mariadb.jdbc:mariadb-java-client:3.5.7")
     testRuntimeOnly("org.postgresql:postgresql:42.7.10")
@@ -74,6 +75,19 @@ tasks.test {
 
 tasks.compileJava {
     options.compilerArgs.addAll(listOf("-Xlint:deprecation", "-Xlint:unchecked"))
+}
+
+tasks.jar {
+    archiveClassifier.set("plain")
+}
+
+tasks.named<ShadowJar>("shadowJar") {
+    archiveClassifier.set("")
+    relocate("org.bstats", "dev.alexisbinh.openeco.libs.bstats")
+}
+
+tasks.assemble {
+    dependsOn(tasks.named("shadowJar"))
 }
 
 tasks.processResources {
