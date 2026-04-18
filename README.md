@@ -25,15 +25,15 @@ What it does not do:
 
 - Paper 1.20.5+ is confirmed to load
 - Folia 1.21+ is the current safe baseline
-- [VaultUnlocked](https://github.com/TheNewEconomy/VaultUnlocked)
+- [Vault](https://www.spigotmc.org/resources/vault.34315/) or [VaultUnlocked](https://github.com/TheNewEconomy/VaultUnlocked)
 - [PlaceholderAPI](https://placeholderapi.com/) if you want placeholders
 
-VaultUnlocked is loaded by Paper as plugin `Vault`. OpenEco depends on that runtime name.
+OpenEco depends on runtime plugin name `Vault`, which is provided by both Vault and VaultUnlocked.
 
 ## Install
 
 1. Put `OpenEco-<version>.jar` in `plugins/`.
-2. Install VaultUnlocked.
+2. Install Vault (legacy) or VaultUnlocked.
 3. Start the server once to generate `plugins/OpenEco/config.yml`.
 4. Stop the server and review the config.
 5. Back up `plugins/OpenEco/` before opening the server.

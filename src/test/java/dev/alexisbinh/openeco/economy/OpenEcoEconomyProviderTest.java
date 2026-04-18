@@ -2,6 +2,7 @@ package dev.alexisbinh.openeco.economy;
 
 import dev.alexisbinh.openeco.api.BalanceCheckResult;
 import dev.alexisbinh.openeco.service.AccountService;
+import dev.alexisbinh.openeco.service.EconomyOperationResponse;
 import net.milkbowl.vault2.economy.EconomyResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,5 +67,38 @@ class OpenEcoEconomyProviderTest {
         assertEquals(EconomyResponse.ResponseType.SUCCESS, response.type);
         assertEquals(0, amount.compareTo(response.amount));
         assertEquals(0, new BigDecimal("12.00").compareTo(response.balance));
+    }
+
+    @Test
+    void depositConvertsLegacyResponseToVaultUnlockedResponse() {
+        UUID accountId = UUID.randomUUID();
+        BigDecimal amount = new BigDecimal("5.00");
+        when(service.deposit(accountId, amount)).thenReturn(new EconomyOperationResponse(
+            new BigDecimal("5.00"),
+            new BigDecimal("17.50"),
+            EconomyOperationResponse.ResponseType.SUCCESS,
+                ""));
+
+        EconomyResponse response = provider.deposit("shop", accountId, amount);
+
+        assertEquals(EconomyResponse.ResponseType.SUCCESS, response.type);
+        assertEquals(0, amount.compareTo(response.amount));
+        assertEquals(0, new BigDecimal("17.50").compareTo(response.balance));
+    }
+
+    @Test
+    void depositPreservesNotImplementedResponseTypeFromLegacyProvider() {
+        UUID accountId = UUID.randomUUID();
+        BigDecimal amount = new BigDecimal("5.00");
+        when(service.deposit(accountId, amount)).thenReturn(new EconomyOperationResponse(
+            BigDecimal.ZERO,
+            BigDecimal.ZERO,
+            EconomyOperationResponse.ResponseType.NOT_IMPLEMENTED,
+                "Not supported"));
+
+        EconomyResponse response = provider.deposit("shop", accountId, amount);
+
+        assertEquals(EconomyResponse.ResponseType.NOT_IMPLEMENTED, response.type);
+        assertEquals("Not supported", response.errorMessage);
     }
 }

@@ -5,7 +5,7 @@ import dev.alexisbinh.openeco.model.PayResult;
 import dev.alexisbinh.openeco.model.TransactionEntry;
 import dev.alexisbinh.openeco.model.TransactionType;
 import dev.alexisbinh.openeco.service.AccountService;
-import net.milkbowl.vault2.economy.EconomyResponse;
+import dev.alexisbinh.openeco.service.EconomyOperationResponse;
 
 import java.math.BigDecimal;
 import java.sql.SQLException;
@@ -192,12 +192,12 @@ public final class OpenEcoApiImpl implements OpenEcoApi {
     public BalanceChangeResult reset(UUID accountId) {
         UUID validatedId = requireAccountId(accountId);
         BigDecimal previousBalance = getAccount(validatedId).map(AccountSnapshot::balance).orElse(BigDecimal.ZERO);
-        EconomyResponse response = service.reset(validatedId);
+        EconomyOperationResponse response = service.reset(validatedId);
         return new BalanceChangeResult(
                 mapChangeStatus(response),
-                response.amount,
+            response.amount(),
                 previousBalance,
-                response.transactionSuccess() ? response.balance : previousBalance);
+            response.transactionSuccess() ? response.balance() : previousBalance);
     }
 
     @Override
@@ -205,12 +205,12 @@ public final class OpenEcoApiImpl implements OpenEcoApi {
         UUID validatedId = requireAccountId(accountId);
         String validatedCurrencyId = requireKnownCurrency(currencyId);
         BigDecimal previousBalance = service.getBalance(validatedId, validatedCurrencyId);
-        EconomyResponse response = service.reset(validatedId, validatedCurrencyId);
+        EconomyOperationResponse response = service.reset(validatedId, validatedCurrencyId);
         return new BalanceChangeResult(
                 mapChangeStatus(response),
-                response.amount,
+            response.amount(),
                 previousBalance,
-                response.transactionSuccess() ? response.balance : previousBalance);
+            response.transactionSuccess() ? response.balance() : previousBalance);
     }
 
     @Override
@@ -537,23 +537,23 @@ public final class OpenEcoApiImpl implements OpenEcoApi {
     private BalanceChangeResult applyBalanceChange(UUID accountId, BigDecimal amount,
                                                    BalanceMutation mutation) {
         BigDecimal previousBalance = getAccount(accountId).map(AccountSnapshot::balance).orElse(BigDecimal.ZERO);
-        EconomyResponse response = mutation.apply(accountId, amount);
+        EconomyOperationResponse response = mutation.apply(accountId, amount);
         return new BalanceChangeResult(
                 mapChangeStatus(response),
-                response.amount,
+            response.amount(),
                 previousBalance,
-                response.transactionSuccess() ? response.balance : previousBalance);
+            response.transactionSuccess() ? response.balance() : previousBalance);
     }
 
     private BalanceChangeResult applyBalanceChange(UUID accountId, String currencyId, BigDecimal amount,
                                                    CurrencyBalanceMutation mutation) {
         BigDecimal previousBalance = service.getBalance(accountId, currencyId);
-        EconomyResponse response = mutation.apply(accountId, currencyId, amount);
+        EconomyOperationResponse response = mutation.apply(accountId, currencyId, amount);
         return new BalanceChangeResult(
                 mapChangeStatus(response),
-                response.amount,
+            response.amount(),
                 previousBalance,
-                response.transactionSuccess() ? response.balance : previousBalance);
+            response.transactionSuccess() ? response.balance() : previousBalance);
     }
 
     private HistoryPage loadHistoryPage(UUID accountId, String currencyId, int page, int pageSize, HistoryFilter filter) {
@@ -661,11 +661,11 @@ public final class OpenEcoApiImpl implements OpenEcoApi {
         };
     }
 
-    private static BalanceChangeResult.Status mapChangeStatus(EconomyResponse response) {
+    private static BalanceChangeResult.Status mapChangeStatus(EconomyOperationResponse response) {
         if (response.transactionSuccess()) {
             return BalanceChangeResult.Status.SUCCESS;
         }
-        return switch (response.errorMessage) {
+        return switch (response.errorMessage()) {
             case "Unknown currency" -> BalanceChangeResult.Status.UNKNOWN_CURRENCY;
             case "Account not found" -> BalanceChangeResult.Status.ACCOUNT_NOT_FOUND;
             case "Amount must be positive", "Amount cannot be negative" -> BalanceChangeResult.Status.INVALID_AMOUNT;
@@ -673,7 +673,7 @@ public final class OpenEcoApiImpl implements OpenEcoApi {
             case "Balance limit reached" -> BalanceChangeResult.Status.BALANCE_LIMIT;
             case "Account is frozen" -> BalanceChangeResult.Status.FROZEN;
             case "Cancelled by plugin" -> BalanceChangeResult.Status.CANCELLED;
-            default -> throw new OpenEcoApiException("Unexpected balance change failure: " + response.errorMessage);
+            default -> throw new OpenEcoApiException("Unexpected balance change failure: " + response.errorMessage());
         };
     }
 
@@ -751,11 +751,11 @@ public final class OpenEcoApiImpl implements OpenEcoApi {
 
     @FunctionalInterface
     private interface BalanceMutation {
-        EconomyResponse apply(UUID accountId, BigDecimal amount);
+        EconomyOperationResponse apply(UUID accountId, BigDecimal amount);
     }
 
     @FunctionalInterface
     private interface CurrencyBalanceMutation {
-        EconomyResponse apply(UUID accountId, String currencyId, BigDecimal amount);
+        EconomyOperationResponse apply(UUID accountId, String currencyId, BigDecimal amount);
     }
 }

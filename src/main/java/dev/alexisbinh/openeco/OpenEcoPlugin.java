@@ -90,11 +90,8 @@ public class OpenEcoPlugin extends JavaPlugin {
             OpenEcoApi.class, api, this, ServicePriority.Normal);
         getLogger().info("Registered openeco addon API service.");
 
-        // ── VaultUnlocked registration ────────────────────────────────────────
-        OpenEcoEconomyProvider provider = new OpenEcoEconomyProvider(service);
-        getServer().getServicesManager().register(
-                Economy.class, provider, this, ServicePriority.Normal);
-        getLogger().info("Registered as VaultUnlocked v2 Economy provider.");
+        // ── VaultUnlocked registration (optional) ─────────────────────────────
+        registerVaultUnlockedEconomy(service);
 
         // ── Legacy Vault v1 registration (for ShopGUI+, SmartSpawner, etc.) ───
         registerLegacyEconomy(service);
@@ -240,6 +237,17 @@ public class OpenEcoPlugin extends JavaPlugin {
         getServer().getServicesManager().register(
                 net.milkbowl.vault.economy.Economy.class, legacyProvider, this, ServicePriority.Normal);
         getLogger().info("Registered as legacy Vault v1 Economy provider.");
+    }
+
+    private void registerVaultUnlockedEconomy(AccountService accountService) {
+        try {
+            OpenEcoEconomyProvider provider = new OpenEcoEconomyProvider(accountService);
+            getServer().getServicesManager().register(
+                    Economy.class, provider, this, ServicePriority.Normal);
+            getLogger().info("Registered as VaultUnlocked v2 Economy provider.");
+        } catch (LinkageError ex) {
+            getLogger().info("VaultUnlocked v2 API not detected; skipping v2 provider registration.");
+        }
     }
 
     @Override

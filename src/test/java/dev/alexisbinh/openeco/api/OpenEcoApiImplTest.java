@@ -5,7 +5,7 @@ import dev.alexisbinh.openeco.model.PayResult;
 import dev.alexisbinh.openeco.model.TransactionEntry;
 import dev.alexisbinh.openeco.model.TransactionType;
 import dev.alexisbinh.openeco.service.AccountService;
-import net.milkbowl.vault2.economy.EconomyResponse;
+import dev.alexisbinh.openeco.service.EconomyOperationResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -171,10 +171,10 @@ class OpenEcoApiImplTest {
         AccountRecord account = new AccountRecord(accountId, "Alice", new BigDecimal("25.00"), 1L, 2L);
 
         when(service.getAccount(accountId)).thenReturn(Optional.of(account));
-        when(service.deposit(accountId, amount)).thenReturn(new EconomyResponse(
-                amount,
-                account.getBalance(),
-                EconomyResponse.ResponseType.FAILURE,
+        when(service.deposit(accountId, amount)).thenReturn(new EconomyOperationResponse(
+            amount,
+            account.getBalance(),
+            EconomyOperationResponse.ResponseType.FAILURE,
                 "Unknown currency"));
 
         BalanceChangeResult result = api.deposit(accountId, amount);

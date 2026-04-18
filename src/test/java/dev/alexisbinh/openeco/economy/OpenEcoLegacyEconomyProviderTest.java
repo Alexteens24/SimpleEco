@@ -2,6 +2,7 @@ package dev.alexisbinh.openeco.economy;
 
 import dev.alexisbinh.openeco.model.AccountRecord;
 import dev.alexisbinh.openeco.service.AccountService;
+import dev.alexisbinh.openeco.service.EconomyOperationResponse;
 import net.milkbowl.vault.economy.EconomyResponse;
 import org.bukkit.OfflinePlayer;
 import org.junit.jupiter.api.BeforeEach;
@@ -77,10 +78,10 @@ class OpenEcoLegacyEconomyProviderTest {
     void depositByNameDelegatesUsingResolvedAccountId() {
         UUID accountId = UUID.randomUUID();
         AccountRecord account = new AccountRecord(accountId, "Alice", new BigDecimal("12.50"), 1L, 1L);
-        net.milkbowl.vault2.economy.EconomyResponse response = new net.milkbowl.vault2.economy.EconomyResponse(
-                new BigDecimal("5.00"),
-                new BigDecimal("17.50"),
-                net.milkbowl.vault2.economy.EconomyResponse.ResponseType.SUCCESS,
+        EconomyOperationResponse response = new EconomyOperationResponse(
+            new BigDecimal("5.00"),
+            new BigDecimal("17.50"),
+            EconomyOperationResponse.ResponseType.SUCCESS,
                 "");
 
         when(service.findByName("Alice")).thenReturn(Optional.of(account));
@@ -168,6 +169,13 @@ class OpenEcoLegacyEconomyProviderTest {
         when(player.getName()).thenReturn(null);
 
         assertFalse(provider.createPlayerAccount(player));
+        verify(service, never()).createAccount(any(UUID.class), anyString());
+    }
+
+    @Test
+    void worldSpecificAccountCreationReturnsFalseWhenWorldAccountsAreUnsupported() {
+        assertFalse(provider.createPlayerAccount("Alice", "world"));
+        assertFalse(provider.createPlayerAccount(player, "world"));
         verify(service, never()).createAccount(any(UUID.class), anyString());
     }
 }

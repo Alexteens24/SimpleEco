@@ -2,6 +2,7 @@ package dev.alexisbinh.openeco.economy;
 
 import dev.alexisbinh.openeco.api.BalanceCheckResult;
 import dev.alexisbinh.openeco.service.AccountService;
+import dev.alexisbinh.openeco.service.EconomyOperationResponse;
 import net.milkbowl.vault2.economy.Economy;
 import net.milkbowl.vault2.economy.EconomyResponse;
 
@@ -185,47 +186,47 @@ public class OpenEcoEconomyProvider implements Economy {
 
     @Override
     public EconomyResponse withdraw(String pluginName, UUID accountID, BigDecimal amount) {
-        return service.withdraw(accountID, amount);
+        return toV2(service.withdraw(accountID, amount));
     }
 
     @Override
     public EconomyResponse withdraw(String pluginName, UUID accountID, String worldName, BigDecimal amount) {
-        return service.withdraw(accountID, amount);
+        return toV2(service.withdraw(accountID, amount));
     }
 
     @Override
     public EconomyResponse withdraw(String pluginName, UUID accountID, String worldName, String currency, BigDecimal amount) {
-        return service.withdraw(accountID, currency, amount);
+        return toV2(service.withdraw(accountID, currency, amount));
     }
 
     @Override
     public EconomyResponse deposit(String pluginName, UUID accountID, BigDecimal amount) {
-        return service.deposit(accountID, amount);
+        return toV2(service.deposit(accountID, amount));
     }
 
     @Override
     public EconomyResponse deposit(String pluginName, UUID accountID, String worldName, BigDecimal amount) {
-        return service.deposit(accountID, amount);
+        return toV2(service.deposit(accountID, amount));
     }
 
     @Override
     public EconomyResponse deposit(String pluginName, UUID accountID, String worldName, String currency, BigDecimal amount) {
-        return service.deposit(accountID, currency, amount);
+        return toV2(service.deposit(accountID, currency, amount));
     }
 
     @Override
     public EconomyResponse set(String pluginName, UUID accountID, BigDecimal amount) {
-        return service.set(accountID, amount);
+        return toV2(service.set(accountID, amount));
     }
 
     @Override
     public EconomyResponse set(String pluginName, UUID accountID, String worldName, BigDecimal amount) {
-        return service.set(accountID, amount);
+        return toV2(service.set(accountID, amount));
     }
 
     @Override
     public EconomyResponse set(String pluginName, UUID accountID, String worldName, String currency, BigDecimal amount) {
-        return service.set(accountID, currency, amount);
+        return toV2(service.set(accountID, currency, amount));
     }
 
     // ── canWithdraw / canDeposit ──────────────────────────────────────────────
@@ -276,6 +277,19 @@ public class OpenEcoEconomyProvider implements Economy {
             default -> "Operation failed";
         };
         return new EconomyResponse(result.amount(), result.currentBalance(), EconomyResponse.ResponseType.FAILURE, message);
+    }
+
+    private static EconomyResponse toV2(EconomyOperationResponse response) {
+        EconomyResponse.ResponseType type = switch (response.type()) {
+            case SUCCESS -> EconomyResponse.ResponseType.SUCCESS;
+            case NOT_IMPLEMENTED -> EconomyResponse.ResponseType.NOT_IMPLEMENTED;
+            default -> EconomyResponse.ResponseType.FAILURE;
+        };
+        return new EconomyResponse(
+                response.amount(),
+                response.balance(),
+                type,
+                response.errorMessage());
     }
 
     @Override public boolean createSharedAccount(String p, UUID accountID, String name, UUID owner) { return false; }

@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
+import dev.alexisbinh.openeco.service.EconomyOperationResponse;
 
 /**
  * Legacy Vault v1 Economy adapter.
@@ -144,8 +145,8 @@ public class OpenEcoLegacyEconomyProvider implements Economy {
         return service.createAccount(player.getUniqueId(), name);
     }
 
-    @Override public boolean createPlayerAccount(String playerName, String worldName) { return createPlayerAccount(playerName); }
-    @Override public boolean createPlayerAccount(OfflinePlayer player, String worldName) { return createPlayerAccount(player); }
+    @Override public boolean createPlayerAccount(String playerName, String worldName) { return false; }
+    @Override public boolean createPlayerAccount(OfflinePlayer player, String worldName) { return false; }
 
     // ── Bank operations (unsupported) ─────────────────────────────────────────
 
@@ -166,12 +167,17 @@ public class OpenEcoLegacyEconomyProvider implements Economy {
     @Override public EconomyResponse isBankMember(String name, OfflinePlayer player) { return notImpl(); }
     @Override public List<String> getBanks() { return Collections.emptyList(); }
 
-    // ── Conversion helper ─────────────────────────────────────────────────────
-
-    private static EconomyResponse toV1(net.milkbowl.vault2.economy.EconomyResponse r) {
-        EconomyResponse.ResponseType type = r.transactionSuccess()
-                ? EconomyResponse.ResponseType.SUCCESS
-                : EconomyResponse.ResponseType.FAILURE;
-        return new EconomyResponse(r.amount.doubleValue(), r.balance.doubleValue(), type, r.errorMessage);
+    private static EconomyResponse toV1(EconomyOperationResponse response) {
+        EconomyResponse.ResponseType type = switch (response.type()) {
+            case SUCCESS -> EconomyResponse.ResponseType.SUCCESS;
+            case NOT_IMPLEMENTED -> EconomyResponse.ResponseType.NOT_IMPLEMENTED;
+            default -> EconomyResponse.ResponseType.FAILURE;
+        };
+        return new EconomyResponse(
+                response.amount().doubleValue(),
+                response.balance().doubleValue(),
+                type,
+                response.errorMessage());
     }
+
 }

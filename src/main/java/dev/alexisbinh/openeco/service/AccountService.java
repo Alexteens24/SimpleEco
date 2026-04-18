@@ -13,7 +13,6 @@ import dev.alexisbinh.openeco.model.TransactionEntry;
 import dev.alexisbinh.openeco.model.TransactionType;
 import dev.alexisbinh.openeco.api.TransferCheckResult;
 import dev.alexisbinh.openeco.storage.AccountRepository;
-import net.milkbowl.vault2.economy.EconomyResponse;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.Nullable;
@@ -359,35 +358,35 @@ public class AccountService {
         return economyOperations.canWithdraw(id, currencyId, amount);
     }
 
-    public EconomyResponse deposit(UUID id, BigDecimal amount) {
+    public EconomyOperationResponse deposit(UUID id, BigDecimal amount) {
         return deposit(id, config.currencyId(), amount);
     }
 
-    public EconomyResponse deposit(UUID id, String currencyId, BigDecimal amount) {
+    public EconomyOperationResponse deposit(UUID id, String currencyId, BigDecimal amount) {
         return economyOperations.deposit(id, currencyId, amount);
     }
 
-    public EconomyResponse withdraw(UUID id, BigDecimal amount) {
+    public EconomyOperationResponse withdraw(UUID id, BigDecimal amount) {
         return withdraw(id, config.currencyId(), amount);
     }
 
-    public EconomyResponse withdraw(UUID id, String currencyId, BigDecimal amount) {
+    public EconomyOperationResponse withdraw(UUID id, String currencyId, BigDecimal amount) {
         return economyOperations.withdraw(id, currencyId, amount);
     }
 
-    public EconomyResponse set(UUID id, BigDecimal amount) {
+    public EconomyOperationResponse set(UUID id, BigDecimal amount) {
         return set(id, config.currencyId(), amount);
     }
 
-    public EconomyResponse set(UUID id, String currencyId, BigDecimal amount) {
+    public EconomyOperationResponse set(UUID id, String currencyId, BigDecimal amount) {
         return economyOperations.set(id, currencyId, amount);
     }
 
-    public EconomyResponse reset(UUID id) {
+    public EconomyOperationResponse reset(UUID id) {
         return reset(id, config.currencyId());
     }
 
-    public EconomyResponse reset(UUID id, String currencyId) {
+    public EconomyOperationResponse reset(UUID id, String currencyId) {
         return economyOperations.reset(id, currencyId);
     }
 

@@ -11,7 +11,6 @@ import dev.alexisbinh.openeco.model.AccountRecord;
 import dev.alexisbinh.openeco.model.PayResult;
 import dev.alexisbinh.openeco.model.TransactionEntry;
 import dev.alexisbinh.openeco.model.TransactionType;
-import net.milkbowl.vault2.economy.EconomyResponse;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.Event;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +59,7 @@ class EconomyOperationsTest {
 
     @Test
     void deposit_updatesBalanceAndLogsTransaction() {
-        EconomyResponse resp = ops.deposit(aliceId, new BigDecimal("3.50"));
+        EconomyOperationResponse resp = ops.deposit(aliceId, new BigDecimal("3.50"));
 
         assertTrue(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("13.50").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -77,7 +76,7 @@ class EconomyOperationsTest {
             if (event instanceof BalanceChangeEvent e) e.setCancelled(true);
         });
 
-        EconomyResponse resp = ops.deposit(aliceId, new BigDecimal("3.00"));
+        EconomyOperationResponse resp = ops.deposit(aliceId, new BigDecimal("3.00"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -90,7 +89,7 @@ class EconomyOperationsTest {
         config = configWith(0.0, 0, new BigDecimal("12.00"), 2);
         ops = buildOps(event -> { });
 
-        EconomyResponse resp = ops.deposit(aliceId, new BigDecimal("5.00"));
+        EconomyOperationResponse resp = ops.deposit(aliceId, new BigDecimal("5.00"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -99,7 +98,7 @@ class EconomyOperationsTest {
 
     @Test
     void deposit_nonPositiveAmount_returnsFailure() {
-        EconomyResponse resp = ops.deposit(aliceId, BigDecimal.ZERO);
+        EconomyOperationResponse resp = ops.deposit(aliceId, BigDecimal.ZERO);
 
         assertFalse(resp.transactionSuccess());
         assertTrue(logged.isEmpty());
@@ -107,7 +106,7 @@ class EconomyOperationsTest {
 
     @Test
     void deposit_unknownAccount_returnsFailure() {
-        EconomyResponse resp = ops.deposit(UUID.randomUUID(), new BigDecimal("1.00"));
+        EconomyOperationResponse resp = ops.deposit(UUID.randomUUID(), new BigDecimal("1.00"));
 
         assertFalse(resp.transactionSuccess());
         assertTrue(logged.isEmpty());
@@ -120,12 +119,12 @@ class EconomyOperationsTest {
             if (event instanceof BalanceChangeEvent balanceEvent
                     && balanceEvent.getReason() == BalanceChangeEvent.Reason.GIVE
                     && nested.compareAndSet(false, true)) {
-                EconomyResponse nestedResp = ops.withdraw(aliceId, new BigDecimal("1.00"));
+                EconomyOperationResponse nestedResp = ops.withdraw(aliceId, new BigDecimal("1.00"));
                 assertTrue(nestedResp.transactionSuccess());
             }
         });
 
-        EconomyResponse resp = ops.deposit(aliceId, new BigDecimal("3.00"));
+        EconomyOperationResponse resp = ops.deposit(aliceId, new BigDecimal("3.00"));
 
         assertTrue(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("12.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -143,10 +142,10 @@ class EconomyOperationsTest {
             }
         });
 
-        EconomyResponse resp = ops.deposit(aliceId, new BigDecimal("3.00"));
+        EconomyOperationResponse resp = ops.deposit(aliceId, new BigDecimal("3.00"));
 
         assertFalse(resp.transactionSuccess());
-        assertEquals("Account is frozen", resp.errorMessage);
+        assertEquals("Account is frozen", resp.errorMessage());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
         assertTrue(logged.isEmpty());
         assertEquals(List.of(BalanceChangeEvent.class), dispatchedEvents.stream().map(Event::getClass).toList());
@@ -156,7 +155,7 @@ class EconomyOperationsTest {
 
     @Test
     void withdraw_updatesBalanceAndLogsTransaction() {
-        EconomyResponse resp = ops.withdraw(aliceId, new BigDecimal("4.00"));
+        EconomyOperationResponse resp = ops.withdraw(aliceId, new BigDecimal("4.00"));
 
         assertTrue(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("6.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -170,7 +169,7 @@ class EconomyOperationsTest {
             if (event instanceof BalanceChangeEvent e) e.setCancelled(true);
         });
 
-        EconomyResponse resp = ops.withdraw(aliceId, new BigDecimal("4.00"));
+        EconomyOperationResponse resp = ops.withdraw(aliceId, new BigDecimal("4.00"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -179,7 +178,7 @@ class EconomyOperationsTest {
 
     @Test
     void withdraw_insufficientFunds_returnsFailure() {
-        EconomyResponse resp = ops.withdraw(aliceId, new BigDecimal("99.00"));
+        EconomyOperationResponse resp = ops.withdraw(aliceId, new BigDecimal("99.00"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -198,10 +197,10 @@ class EconomyOperationsTest {
             }
         });
 
-        EconomyResponse resp = ops.withdraw(aliceId, new BigDecimal("4.00"));
+        EconomyOperationResponse resp = ops.withdraw(aliceId, new BigDecimal("4.00"));
 
         assertFalse(resp.transactionSuccess());
-        assertEquals("Account is frozen", resp.errorMessage);
+        assertEquals("Account is frozen", resp.errorMessage());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
         assertTrue(logged.isEmpty());
         assertEquals(List.of(BalanceChangeEvent.class), dispatchedEvents.stream().map(Event::getClass).toList());
@@ -211,7 +210,7 @@ class EconomyOperationsTest {
 
     @Test
     void set_updatesBalanceToExactValue() {
-        EconomyResponse resp = ops.set(aliceId, new BigDecimal("7.00"));
+        EconomyOperationResponse resp = ops.set(aliceId, new BigDecimal("7.00"));
 
         assertTrue(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("7.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -225,7 +224,7 @@ class EconomyOperationsTest {
             if (event instanceof BalanceChangeEvent e) e.setCancelled(true);
         });
 
-        EconomyResponse resp = ops.set(aliceId, new BigDecimal("7.00"));
+        EconomyOperationResponse resp = ops.set(aliceId, new BigDecimal("7.00"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -237,7 +236,7 @@ class EconomyOperationsTest {
         config = configWith(0.0, 0, new BigDecimal("5.00"), 2);
         ops = buildOps(event -> { });
 
-        EconomyResponse resp = ops.set(aliceId, new BigDecimal("6.00"));
+        EconomyOperationResponse resp = ops.set(aliceId, new BigDecimal("6.00"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -245,7 +244,7 @@ class EconomyOperationsTest {
 
     @Test
     void set_negativeAmount_returnsFailure() {
-        EconomyResponse resp = ops.set(aliceId, new BigDecimal("-1.00"));
+        EconomyOperationResponse resp = ops.set(aliceId, new BigDecimal("-1.00"));
 
         assertFalse(resp.transactionSuccess());
         assertTrue(logged.isEmpty());
@@ -253,7 +252,7 @@ class EconomyOperationsTest {
 
     @Test
     void set_zeroIsAllowed() {
-        EconomyResponse resp = ops.set(aliceId, BigDecimal.ZERO);
+        EconomyOperationResponse resp = ops.set(aliceId, BigDecimal.ZERO);
 
         assertTrue(resp.transactionSuccess());
         assertEquals(0, BigDecimal.ZERO.compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -263,7 +262,7 @@ class EconomyOperationsTest {
 
     @Test
     void reset_restoresStartingBalance() {
-        EconomyResponse resp = ops.reset(aliceId);
+        EconomyOperationResponse resp = ops.reset(aliceId);
 
         assertTrue(resp.transactionSuccess());
         // starting balance in our test config is 5.00
@@ -278,7 +277,7 @@ class EconomyOperationsTest {
             if (event instanceof BalanceChangeEvent e) e.setCancelled(true);
         });
 
-        EconomyResponse resp = ops.reset(aliceId);
+        EconomyOperationResponse resp = ops.reset(aliceId);
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -340,7 +339,7 @@ class EconomyOperationsTest {
         AtomicBoolean nested = new AtomicBoolean();
         ops = buildOps(event -> {
             if (event instanceof PayEvent && nested.compareAndSet(false, true)) {
-                EconomyResponse nestedResp = ops.deposit(aliceId, new BigDecimal("2.00"));
+                EconomyOperationResponse nestedResp = ops.deposit(aliceId, new BigDecimal("2.00"));
                 assertTrue(nestedResp.transactionSuccess());
             }
         });
@@ -574,7 +573,7 @@ class EconomyOperationsTest {
 
     @Test
     void deposit_amountRoundedToZeroFailsWithoutMutation() {
-        EconomyResponse resp = ops.deposit(aliceId, new BigDecimal("0.001"));
+        EconomyOperationResponse resp = ops.deposit(aliceId, new BigDecimal("0.001"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));
@@ -583,7 +582,7 @@ class EconomyOperationsTest {
 
     @Test
     void withdraw_amountRoundedToZeroFailsWithoutMutation() {
-        EconomyResponse resp = ops.withdraw(aliceId, new BigDecimal("0.001"));
+        EconomyOperationResponse resp = ops.withdraw(aliceId, new BigDecimal("0.001"));
 
         assertFalse(resp.transactionSuccess());
         assertEquals(0, new BigDecimal("10.00").compareTo(registry.getLiveRecord(aliceId).getBalance()));

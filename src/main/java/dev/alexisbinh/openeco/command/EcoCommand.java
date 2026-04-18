@@ -4,8 +4,8 @@ import dev.alexisbinh.openeco.Messages;
 import dev.alexisbinh.openeco.OpenEcoPlugin;
 import dev.alexisbinh.openeco.model.AccountRecord;
 import dev.alexisbinh.openeco.service.AccountService;
+import dev.alexisbinh.openeco.service.EconomyOperationResponse;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
-import net.milkbowl.vault2.economy.EconomyResponse;
 import org.bukkit.command.*;
 import org.jetbrains.annotations.NotNull;
 
@@ -179,12 +179,12 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
             }
             var res = service.reset(target.getId(), currencyId);
             if (!res.transactionSuccess()) {
-                sender.sendMessage("§cFailed: " + res.errorMessage);
+                sender.sendMessage("§cFailed: " + res.errorMessage());
                 return true;
             }
             messages.send(sender, "eco-reset",
                     Placeholder.unparsed("player", target.getLastKnownName()),
-                    Placeholder.unparsed("balance", service.format(res.balance, currencyId)));
+                    Placeholder.unparsed("balance", service.format(res.balance(), currencyId)));
             return true;
         }
 
@@ -245,10 +245,10 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
 
         switch (sub) {
             case "give" -> {
-                EconomyResponse res = service.deposit(target.getId(), currencyId, amount);
+                EconomyOperationResponse res = service.deposit(target.getId(), currencyId, amount);
                 if (!res.transactionSuccess()) {
                     String limit = service.getFormattedMaxBalance(currencyId);
-                    if (limit != null && res.errorMessage.contains("limit")) {
+                    if (limit != null && res.errorMessage().contains("limit")) {
                         messages.send(sender, "eco-balance-limit",
                                 Placeholder.unparsed("player", target.getLastKnownName()),
                                 Placeholder.unparsed("limit", limit));
@@ -261,10 +261,10 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
                 messages.send(sender, "eco-give",
                         Placeholder.unparsed("amount", service.format(amount, currencyId)),
                         Placeholder.unparsed("player", target.getLastKnownName()),
-                        Placeholder.unparsed("balance", service.format(res.balance, currencyId)));
+                    Placeholder.unparsed("balance", service.format(res.balance(), currencyId)));
             }
             case "take" -> {
-                EconomyResponse res = service.withdraw(target.getId(), currencyId, amount);
+                EconomyOperationResponse res = service.withdraw(target.getId(), currencyId, amount);
                 if (!res.transactionSuccess()) {
                     messages.send(sender, "eco-take-failed",
                             Placeholder.unparsed("player", target.getLastKnownName()));
@@ -273,13 +273,13 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
                 messages.send(sender, "eco-take",
                         Placeholder.unparsed("amount", service.format(amount, currencyId)),
                         Placeholder.unparsed("player", target.getLastKnownName()),
-                        Placeholder.unparsed("balance", service.format(res.balance, currencyId)));
+                        Placeholder.unparsed("balance", service.format(res.balance(), currencyId)));
             }
             case "set" -> {
-                EconomyResponse res = service.set(target.getId(), currencyId, amount);
+                EconomyOperationResponse res = service.set(target.getId(), currencyId, amount);
                 if (!res.transactionSuccess()) {
                     String limit = service.getFormattedMaxBalance(currencyId);
-                    if (limit != null && res.errorMessage.contains("limit")) {
+                    if (limit != null && res.errorMessage().contains("limit")) {
                         messages.send(sender, "eco-balance-limit",
                                 Placeholder.unparsed("player", target.getLastKnownName()),
                                 Placeholder.unparsed("limit", limit));
@@ -291,7 +291,7 @@ public class EcoCommand implements CommandExecutor, TabCompleter {
                 }
                 messages.send(sender, "eco-set",
                         Placeholder.unparsed("player", target.getLastKnownName()),
-                        Placeholder.unparsed("balance", service.format(res.balance, currencyId)));
+                    Placeholder.unparsed("balance", service.format(res.balance(), currencyId)));
             }
         }
         return true;

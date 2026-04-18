@@ -11,7 +11,6 @@ import dev.alexisbinh.openeco.model.AccountRecord;
 import dev.alexisbinh.openeco.model.PayResult;
 import dev.alexisbinh.openeco.model.TransactionEntry;
 import dev.alexisbinh.openeco.model.TransactionType;
-import net.milkbowl.vault2.economy.EconomyResponse;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -114,11 +113,11 @@ final class EconomyOperations {
         }
     }
 
-    EconomyResponse deposit(UUID id, BigDecimal amount) {
+    EconomyOperationResponse deposit(UUID id, BigDecimal amount) {
         return deposit(id, defaultCurrencyId(), amount);
     }
 
-    EconomyResponse deposit(UUID id, String currencyId, BigDecimal amount) {
+    EconomyOperationResponse deposit(UUID id, String currencyId, BigDecimal amount) {
         EconomyConfigSnapshot currentConfig = configSupplier.get();
         CurrencyDefinition currency = resolveCurrency(currentConfig, currencyId);
         if (currency == null) {
@@ -185,11 +184,11 @@ final class EconomyOperations {
         return success(scaled, completedEvent.getNewBalance());
     }
 
-    EconomyResponse withdraw(UUID id, BigDecimal amount) {
+    EconomyOperationResponse withdraw(UUID id, BigDecimal amount) {
         return withdraw(id, defaultCurrencyId(), amount);
     }
 
-    EconomyResponse withdraw(UUID id, String currencyId, BigDecimal amount) {
+    EconomyOperationResponse withdraw(UUID id, String currencyId, BigDecimal amount) {
         EconomyConfigSnapshot currentConfig = configSupplier.get();
         CurrencyDefinition currency = resolveCurrency(currentConfig, currencyId);
         if (currency == null) {
@@ -255,11 +254,11 @@ final class EconomyOperations {
         return success(scaled, completedEvent.getNewBalance());
     }
 
-    EconomyResponse set(UUID id, BigDecimal amount) {
+    EconomyOperationResponse set(UUID id, BigDecimal amount) {
         return set(id, defaultCurrencyId(), amount);
     }
 
-    EconomyResponse set(UUID id, String currencyId, BigDecimal amount) {
+    EconomyOperationResponse set(UUID id, String currencyId, BigDecimal amount) {
         if (amount.compareTo(BigDecimal.ZERO) < 0) {
             return failure(amount, BigDecimal.ZERO, "Amount cannot be negative");
         }
@@ -324,11 +323,11 @@ final class EconomyOperations {
         return success(scaled, completedEvent.getNewBalance());
     }
 
-    EconomyResponse reset(UUID id) {
+    EconomyOperationResponse reset(UUID id) {
         return reset(id, defaultCurrencyId());
     }
 
-    EconomyResponse reset(UUID id, String currencyId) {
+    EconomyOperationResponse reset(UUID id, String currencyId) {
         EconomyConfigSnapshot currentConfig = configSupplier.get();
         CurrencyDefinition currency = resolveCurrency(currentConfig, currencyId);
         if (currency == null) {
@@ -716,11 +715,11 @@ final class EconomyOperations {
         return amount.setScale(currency.fractionalDigits(), RoundingMode.HALF_UP);
     }
 
-    private static EconomyResponse success(BigDecimal amount, BigDecimal balance) {
-        return new EconomyResponse(amount, balance, EconomyResponse.ResponseType.SUCCESS, "");
+    private static EconomyOperationResponse success(BigDecimal amount, BigDecimal balance) {
+        return new EconomyOperationResponse(amount, balance, EconomyOperationResponse.ResponseType.SUCCESS, "");
     }
 
-    private static EconomyResponse failure(BigDecimal amount, BigDecimal balance, String message) {
-        return new EconomyResponse(amount, balance, EconomyResponse.ResponseType.FAILURE, message);
+    private static EconomyOperationResponse failure(BigDecimal amount, BigDecimal balance, String message) {
+        return new EconomyOperationResponse(amount, balance, EconomyOperationResponse.ResponseType.FAILURE, message);
     }
 }
