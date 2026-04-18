@@ -649,11 +649,25 @@ public class AccountService {
             snap = live.snapshot();
             live.clearDirty();
         }
+
+        if (!transactionHistoryService.waitForDrain()) {
+            log.warning("Skipping cross-server flush for " + id
+                    + " because pending transaction writes did not drain in time.");
+            AccountRecord current = accountRegistry.getLiveRecord(id);
+            if (current != null) {
+                current.markDirty();
+            }
+            return;
+        }
+
         try {
             repository.upsertBatch(List.of(snap));
         } catch (SQLException e) {
             log.warning("Cross-server flush failed for " + id + ": " + e.getMessage());
-            live.markDirty();
+            AccountRecord current = accountRegistry.getLiveRecord(id);
+            if (current != null) {
+                current.markDirty();
+            }
         }
     }
 

@@ -418,7 +418,7 @@ final class EconomyOperations {
                 if (!accountRegistry.isLive(fromId, fromRecord) || !accountRegistry.isLive(toId, toRecord)) {
                     return new TransferCheckResult(TransferCheckResult.Status.ACCOUNT_NOT_FOUND, scaled);
                 }
-                if (fromRecord.isFrozen()) {
+                if (fromRecord.isFrozen() || toRecord.isFrozen()) {
                     return new TransferCheckResult(TransferCheckResult.Status.FROZEN, scaled);
                 }
                 if (fromRecord.getBalance(currency.id()).compareTo(scaled) < 0) {
@@ -527,7 +527,7 @@ final class EconomyOperations {
                             null);
                 }
 
-                if (fromRecord.isFrozen()) {
+                if (fromRecord.isFrozen() || toRecord.isFrozen()) {
                     return new TransferPreviewResult(
                             TransferPreviewResult.Status.FROZEN,
                             scaled,

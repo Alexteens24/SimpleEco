@@ -516,6 +516,19 @@ class EconomyOperationsTest {
         assertTrue(logged.isEmpty());
     }
 
+    @Test
+    void previewTransfer_frozenRecipientIsRejected() {
+        AccountRecord recipient = registry.getLiveRecord(bobId);
+        synchronized (recipient) {
+            recipient.setFrozen(true);
+        }
+
+        TransferPreviewResult result = ops.previewTransfer(aliceId, bobId, new BigDecimal("1.00"));
+
+        assertEquals(TransferPreviewResult.Status.FROZEN, result.status());
+        assertTrue(logged.isEmpty());
+    }
+
     // ── canDeposit / canWithdraw ───────────────────────────────────────────────
 
     @Test
@@ -597,6 +610,18 @@ class EconomyOperationsTest {
         TransferCheckResult result = ops.canTransfer(aliceId, bobId, new BigDecimal("0.001"));
 
         assertEquals(TransferCheckResult.Status.INVALID_AMOUNT, result.status());
+    }
+
+    @Test
+    void canTransfer_frozenRecipientIsRejected() {
+        AccountRecord recipient = registry.getLiveRecord(bobId);
+        synchronized (recipient) {
+            recipient.setFrozen(true);
+        }
+
+        TransferCheckResult result = ops.canTransfer(aliceId, bobId, new BigDecimal("1.00"));
+
+        assertEquals(TransferCheckResult.Status.FROZEN, result.status());
     }
 
     // ── helpers ───────────────────────────────────────────────────────────────

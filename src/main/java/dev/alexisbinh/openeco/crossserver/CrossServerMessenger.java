@@ -49,6 +49,10 @@ public class CrossServerMessenger implements PluginMessageListener {
         if (space < 0) return;
 
         String cmd = msg.substring(0, space);
+        if (!"flush".equals(cmd) && !"refresh".equals(cmd)) {
+            return;
+        }
+
         String uuidStr = msg.substring(space + 1).trim();
         UUID uuid;
         try {
@@ -57,9 +61,16 @@ public class CrossServerMessenger implements PluginMessageListener {
             return; // malformed UUID — ignore
         }
 
+        UUID playerId = player.getUniqueId();
+        if (!playerId.equals(uuid)) {
+            log.warning("Ignoring cross-server " + cmd + " request for " + uuid
+                    + " from " + playerId + " due to UUID mismatch.");
+            return;
+        }
+
         switch (cmd) {
             case "flush" -> {
-                UUID id = uuid;
+                UUID id = playerId;
                 plugin.getServer().getAsyncScheduler().runNow(plugin, task -> {
                     service.flushAccount(id);
                     // Notify proxy that flush is done
@@ -71,7 +82,7 @@ public class CrossServerMessenger implements PluginMessageListener {
                 });
             }
             case "refresh" -> {
-                UUID id = uuid;
+                UUID id = playerId;
                 plugin.getServer().getAsyncScheduler().runNow(plugin,
                         task -> service.refreshAccount(id));
             }

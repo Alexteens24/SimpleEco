@@ -43,7 +43,7 @@ commands:
     usage: /pay <player> <amount> [currency]
   eco:
     description: Economy administration
-    usage: /eco <give|take|set|reset|delete|freeze|unfreeze|reload> <player> [amount] [currency]
+    usage: /eco <give|take|set|reset|delete|freeze|unfreeze|rename|reload> <player> [amount] [currency]
     aliases: [economy]
   history:
     description: View transaction history

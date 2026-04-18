@@ -294,6 +294,7 @@ return true;
 
 - account existence
 - self-transfer
+- frozen account state
 - sender balance
 - recipient max balance
 
@@ -331,6 +332,7 @@ Statuses:
 - `INSUFFICIENT_FUNDS`
 - `BALANCE_LIMIT`
 - `SELF_TRANSFER`
+- `FROZEN`
 
 ### TransferResult
 

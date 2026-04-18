@@ -402,6 +402,40 @@ class AccountServicePersistenceIntegrationTest {
     }
 
     @Test
+    void flushAccountWaitsForQueuedHistoryWritesBeforePersistingAccount() throws Exception {
+        BlockingRepository repository = new BlockingRepository();
+        AccountService service = newService(repository);
+        ExecutorService executor = Executors.newSingleThreadExecutor();
+
+        try {
+            UUID accountId = UUID.randomUUID();
+
+            assertTrue(service.createAccount(accountId, "Alice"));
+            assertTrue(service.deposit(accountId, new BigDecimal("3.00")).transactionSuccess());
+            assertTrue(repository.transactionInsertStarted.await(2, TimeUnit.SECONDS));
+
+            Future<?> flushFuture = executor.submit(() -> service.flushAccount(accountId));
+
+            assertFalse(repository.upsertStarted.await(200, TimeUnit.MILLISECONDS));
+
+            repository.allowTransactionInsert.countDown();
+            flushFuture.get(2, TimeUnit.SECONDS);
+
+            assertTrue(repository.upsertStarted.await(1, TimeUnit.SECONDS));
+            assertEquals(1, repository.upsertCalls);
+            assertEquals(1, repository.countTransactions(accountId));
+            assertEquals(1, repository.lastUpsertedRecords.size());
+            assertEquals(0, new BigDecimal("8.00").compareTo(repository.lastUpsertedRecords.getFirst().getBalance()));
+
+            service.shutdown();
+        } finally {
+            repository.allowTransactionInsert.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void payWithTaxTransfersCorrectAmountsAndLogsBothEntries() throws Exception {
         JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "pay-tax-test");
         try {
