@@ -30,6 +30,8 @@ import org.junit.jupiter.api.io.TempDir;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.nio.file.Path;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -307,6 +309,45 @@ class AccountServicePersistenceIntegrationTest {
             assertTrue(reader.hasAccount(accountId));
             assertEquals("Alice", reader.getAccount(accountId).orElseThrow().getLastKnownName());
             assertEquals(0, new BigDecimal("12.50").compareTo(reader.getBalance(accountId)));
+
+            writer.shutdown();
+            reader.shutdown();
+        } finally {
+            writerRepository.close();
+            readerRepository.close();
+        }
+    }
+
+    @Test
+    void refreshAccountKeepsLiveRecordIdentityWhileApplyingFreshSnapshot() throws Exception {
+        String filename = "cross-server-refresh-identity-test";
+        UUID accountId = UUID.randomUUID();
+
+        JdbcAccountRepository writerRepository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), filename);
+        JdbcAccountRepository readerRepository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), filename);
+        try {
+            AccountService writer = newService(writerRepository);
+            AccountService reader = newService(readerRepository);
+            writer.loadAll();
+            reader.loadAll();
+
+            assertTrue(writer.createAccount(accountId, "Alice"));
+            writer.flushAccount(accountId);
+
+            reader.refreshAccount(accountId);
+            assertTrue(reader.hasAccount(accountId));
+            AccountRecord beforeRefresh = getLiveRecord(reader, accountId);
+            assertNotNull(beforeRefresh);
+
+            assertTrue(writer.deposit(accountId, new BigDecimal("10.00")).transactionSuccess());
+            writer.flushAccount(accountId);
+
+            reader.refreshAccount(accountId);
+
+            AccountRecord afterRefresh = getLiveRecord(reader, accountId);
+            assertNotNull(afterRefresh);
+            assertSame(beforeRefresh, afterRefresh);
+            assertEquals(0, new BigDecimal("15.00").compareTo(reader.getBalance(accountId)));
 
             writer.shutdown();
             reader.shutdown();
@@ -673,6 +714,16 @@ class AccountServicePersistenceIntegrationTest {
 
     private static AccountService newService(AccountRepository repository) {
         return newServiceWithConfig(repository, testConfig(0.0, -1));
+    }
+
+    private static AccountRecord getLiveRecord(AccountService service, UUID id) throws Exception {
+        Field registryField = AccountService.class.getDeclaredField("accountRegistry");
+        registryField.setAccessible(true);
+        Object registry = registryField.get(service);
+
+        Method getLiveRecord = registry.getClass().getDeclaredMethod("getLiveRecord", UUID.class);
+        getLiveRecord.setAccessible(true);
+        return (AccountRecord) getLiveRecord.invoke(registry, id);
     }
 
     private static AccountService newServiceWithConfig(AccountRepository repository, YamlConfiguration config) {

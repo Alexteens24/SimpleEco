@@ -766,7 +766,7 @@ public class AccountService {
             alignLoadedRecordCurrencies(freshRecord, config);
 
             synchronized (persistenceLock) {
-                if (!accountRegistry.replace(freshRecord)) {
+                if (!accountRegistry.refreshInPlace(freshRecord)) {
                     log.warning("Cross-server refresh skipped for " + id
                             + " because refreshed account name '" + freshRecord.getLastKnownName()
                             + "' is already claimed by another in-memory account.");

@@ -58,21 +58,21 @@ public final class AccountRecord {
     }
 
     public UUID getId() { return id; }
-    public String getLastKnownName() { return lastKnownName; }
+    public synchronized String getLastKnownName() { return lastKnownName; }
     public BigDecimal getBalance() { return getBalance(primaryCurrencyId); }
-    public BigDecimal getBalance(String currencyId) {
+    public synchronized BigDecimal getBalance(String currencyId) {
         String requestedCurrencyId = requireCurrencyId(currencyId);
         String storedCurrencyId = findStoredCurrencyId(requestedCurrencyId);
         return storedCurrencyId != null ? balances.get(storedCurrencyId) : BigDecimal.ZERO;
     }
-    public Map<String, BigDecimal> getBalancesSnapshot() { return Map.copyOf(balances); }
+    public synchronized Map<String, BigDecimal> getBalancesSnapshot() { return Map.copyOf(balances); }
     public String getPrimaryCurrencyId() { return primaryCurrencyId; }
     public long getCreatedAt() { return createdAt; }
     public long getUpdatedAt() { return updatedAt; }
     public boolean isDirty() { return dirty; }
     public boolean isFrozen() { return frozen; }
 
-    public void setLastKnownName(String name) {
+    public synchronized void setLastKnownName(String name) {
         this.lastKnownName = name;
         this.updatedAt = System.currentTimeMillis();
         this.dirty = true;
@@ -82,11 +82,11 @@ public final class AccountRecord {
         setBalance(primaryCurrencyId, balance);
     }
 
-    public void setBalance(String currencyId, BigDecimal balance) {
+    public synchronized void setBalance(String currencyId, BigDecimal balance) {
         putBalance(requireCurrencyId(currencyId), Objects.requireNonNull(balance, "balance"), true);
     }
 
-    public void setPrimaryCurrencyId(String currencyId) {
+    public synchronized void setPrimaryCurrencyId(String currencyId) {
         String canonicalCurrencyId = requireCurrencyId(currencyId);
         String storedCurrencyId = findStoredCurrencyId(canonicalCurrencyId);
         if (storedCurrencyId != null && !storedCurrencyId.equals(canonicalCurrencyId)) {
@@ -97,20 +97,20 @@ public final class AccountRecord {
         this.balances.putIfAbsent(this.primaryCurrencyId, BigDecimal.ZERO);
     }
 
-    public void setFrozen(boolean frozen) {
+    public synchronized void setFrozen(boolean frozen) {
         this.frozen = frozen;
         this.dirty = true;
     }
 
-    public void markDirty() {
+    public synchronized void markDirty() {
         this.dirty = true;
     }
 
-    public void clearDirty() {
+    public synchronized void clearDirty() {
         this.dirty = false;
     }
 
-    public boolean canonicalizeCurrencyIds(Function<String, String> canonicalizer) {
+    public synchronized boolean canonicalizeCurrencyIds(Function<String, String> canonicalizer) {
         Objects.requireNonNull(canonicalizer, "canonicalizer");
 
         Map<String, BigDecimal> rewrittenBalances = new HashMap<>();
@@ -141,8 +141,30 @@ public final class AccountRecord {
         return changed;
     }
 
+    /**
+     * Replaces mutable state from a fresh snapshot while preserving this object identity.
+     * This avoids races where callers still hold a reference to the current live instance.
+     */
+    public synchronized void overwriteFrom(AccountRecord source) {
+        Objects.requireNonNull(source, "source");
+        if (!id.equals(source.id)) {
+            throw new IllegalArgumentException("Cannot overwrite account " + id + " from " + source.id);
+        }
+        if (source == this) {
+            return;
+        }
+
+        this.lastKnownName = source.getLastKnownName();
+        this.primaryCurrencyId = source.getPrimaryCurrencyId();
+        this.balances.clear();
+        this.balances.putAll(source.getBalancesSnapshot());
+        this.updatedAt = source.getUpdatedAt();
+        this.frozen = source.isFrozen();
+        this.dirty = false;
+    }
+
     /** Returns an immutable snapshot safe to flush to DB while modifications continue. */
-    public AccountRecord snapshot() {
+    public synchronized AccountRecord snapshot() {
         AccountRecord snap = new AccountRecord(id, lastKnownName, primaryCurrencyId, balances, createdAt, updatedAt);
         snap.frozen = this.frozen;
         return snap;
