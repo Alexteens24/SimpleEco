@@ -41,6 +41,7 @@ Notes:
 - `max-balance: -1` means unlimited.
 - The legacy `currency.*` block is still accepted for backward compatibility, but new configs should use `currencies.*`.
 - Reloading after changing `currencies.default` switches the default-currency wrappers immediately. Named balances stay attached to their own currency ids.
+- OpenEco also migrates the saved file on startup and `/eco reload`: it adds missing defaults, rewrites legacy `currency.*` into `currencies.*`, and removes the deprecated keys from the file.
 
 ## Accounts
 

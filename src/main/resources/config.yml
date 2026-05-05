@@ -13,8 +13,8 @@
 # limitations under the License.
 
 currencies:
-  # Preferred multi-currency config. Existing servers may keep the legacy
-  # currency.* block; openeco still reads it for backwards compatibility.
+  # Preferred multi-currency config. OpenEco will migrate legacy currency.*
+  # keys into this layout on startup/reload and remove the old section.
   default: openeco
   definitions:
     openeco:
@@ -27,7 +27,8 @@ currencies:
       # Maximum balance a player can hold (-1 = unlimited)
       max-balance: -1
 
-# Legacy single-currency format is still accepted during the migration window.
+# Legacy single-currency format is still accepted during the migration window,
+# but OpenEco rewrites it to currencies.* on startup/reload and removes the old keys.
 # currency:
 #   id: "openeco"
 #   name-singular: "Dollar"

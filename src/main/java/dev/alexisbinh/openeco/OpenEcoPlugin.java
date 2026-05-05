@@ -35,9 +35,14 @@ import net.milkbowl.vault2.economy.Economy;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.sql.SQLException;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 public class OpenEcoPlugin extends JavaPlugin {
@@ -52,6 +57,8 @@ public class OpenEcoPlugin extends JavaPlugin {
     @Override
     public void onEnable() {
         saveDefaultConfig();
+        migrateConfig();
+        reloadConfig();
 
         // ── Storage ──────────────────────────────────────────────────────────
         String dialectStr = getConfig().getString("storage.type", "sqlite");
@@ -163,6 +170,7 @@ public class OpenEcoPlugin extends JavaPlugin {
     }
 
     public void reloadSettings() {
+        migrateConfig();
         reloadConfig();
         if (service != null) {
             service.reloadConfig(getConfig());
@@ -208,6 +216,26 @@ public class OpenEcoPlugin extends JavaPlugin {
             configured = getConfig().getString("currency.id", "openeco");
         }
         return configured == null || configured.isBlank() ? "openeco" : configured.trim();
+    }
+
+    private void migrateConfig() {
+        File configFile = new File(getDataFolder(), "config.yml");
+        YamlConfiguration currentConfig = YamlConfiguration.loadConfiguration(configFile);
+        try (InputStream defaultConfigStream = getResource("config.yml")) {
+            if (defaultConfigStream == null) {
+                getLogger().warning("Could not load bundled config.yml for migration; skipping config migration.");
+                return;
+            }
+
+            YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(
+                    new InputStreamReader(defaultConfigStream, StandardCharsets.UTF_8));
+            if (ConfigMigrator.migrate(currentConfig, defaultConfig)) {
+                currentConfig.save(configFile);
+                getLogger().info("Migrated OpenEco config to the latest schema.");
+            }
+        } catch (IOException e) {
+            getLogger().warning("Failed to migrate config.yml: " + e.getMessage());
+        }
     }
 
     private void restartAutoSaveTask() {
