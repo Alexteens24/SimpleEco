@@ -44,6 +44,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -560,6 +561,37 @@ class AccountServicePersistenceIntegrationTest {
     }
 
     @Test
+    void flushAccountDoesNotResurrectAccountDeletedWhileFlushIsInFlight() throws Exception {
+        BlockingRepository repository = new BlockingRepository(true);
+        AccountService service = newService(repository);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            UUID accountId = UUID.randomUUID();
+
+            assertTrue(service.createAccount(accountId, "Alice"));
+
+            Future<?> flushFuture = executor.submit(() -> service.flushAccount(accountId));
+            assertTrue(repository.upsertStarted.await(2, TimeUnit.SECONDS));
+
+            Future<Boolean> deleteFuture = executor.submit(() -> service.deleteAccount(accountId));
+            assertThrows(TimeoutException.class, () -> deleteFuture.get(200, TimeUnit.MILLISECONDS));
+
+            repository.allowUpsert.countDown();
+
+            flushFuture.get(2, TimeUnit.SECONDS);
+            assertTrue(deleteFuture.get(2, TimeUnit.SECONDS));
+            assertFalse(repository.loadAccount(accountId).isPresent());
+
+            service.shutdown();
+        } finally {
+            repository.allowUpsert.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void payWithTaxTransfersCorrectAmountsAndLogsBothEntries() throws Exception {
         JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "pay-tax-test");
         try {
@@ -801,9 +833,19 @@ class AccountServicePersistenceIntegrationTest {
         private final CountDownLatch transactionInsertStarted = new CountDownLatch(1);
         private final CountDownLatch allowTransactionInsert = new CountDownLatch(1);
         private final CountDownLatch upsertStarted = new CountDownLatch(1);
+        private final CountDownLatch allowUpsert = new CountDownLatch(1);
+        private final boolean blockUpsert;
         private final List<TransactionEntry> transactions = new ArrayList<>();
         private List<AccountRecord> lastUpsertedRecords = List.of();
         private int upsertCalls;
+
+        private BlockingRepository() {
+            this(false);
+        }
+
+        private BlockingRepository(boolean blockUpsert) {
+            this.blockUpsert = blockUpsert;
+        }
 
         @Override
         public synchronized List<AccountRecord> loadAll() {
@@ -841,17 +883,32 @@ class AccountServicePersistenceIntegrationTest {
         }
 
         @Override
-        public synchronized void upsertBatch(Collection<AccountRecord> records) {
-            lastUpsertedRecords = records.stream()
-                    .map(AccountRecord::snapshot)
-                    .toList();
-            upsertCalls++;
+        public void upsertBatch(Collection<AccountRecord> records) {
             upsertStarted.countDown();
+            if (blockUpsert) {
+                try {
+                    if (!allowUpsert.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Timed out waiting to allow account upsert");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting to allow account upsert", e);
+                }
+            }
+
+            synchronized (this) {
+                lastUpsertedRecords = records.stream()
+                        .map(AccountRecord::snapshot)
+                        .toList();
+                upsertCalls++;
+            }
         }
 
         @Override
-        public void delete(UUID accountId) {
-            // No-op for this test repository.
+        public synchronized void delete(UUID accountId) {
+            lastUpsertedRecords = lastUpsertedRecords.stream()
+                    .filter(record -> !record.getId().equals(accountId))
+                    .toList();
         }
 
         @Override

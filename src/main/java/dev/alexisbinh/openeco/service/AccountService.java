@@ -724,32 +724,34 @@ public class AccountService {
      * Intended for cross-server use: call async before the player disconnects.
      */
     public void flushAccount(UUID id) {
-        AccountRecord live = accountRegistry.getLiveRecord(id);
-        if (live == null) return;
-        AccountRecord snap;
-        synchronized (live) {
-            if (!live.isDirty()) return;
-            snap = live.snapshot();
-            live.clearDirty();
-        }
-
-        if (!transactionHistoryService.waitForDrain()) {
-            log.warning("Skipping cross-server flush for " + id
-                    + " because pending transaction writes did not drain in time.");
-            AccountRecord current = accountRegistry.getLiveRecord(id);
-            if (current != null) {
-                current.markDirty();
+        synchronized (persistenceLock) {
+            AccountRecord live = accountRegistry.getLiveRecord(id);
+            if (live == null) return;
+            AccountRecord snap;
+            synchronized (live) {
+                if (!live.isDirty()) return;
+                snap = live.snapshot();
+                live.clearDirty();
             }
-            return;
-        }
 
-        try {
-            repository.upsertBatch(List.of(snap));
-        } catch (SQLException e) {
-            log.warning("Cross-server flush failed for " + id + ": " + e.getMessage());
-            AccountRecord current = accountRegistry.getLiveRecord(id);
-            if (current != null) {
-                current.markDirty();
+            if (!transactionHistoryService.waitForDrain()) {
+                log.warning("Skipping cross-server flush for " + id
+                        + " because pending transaction writes did not drain in time.");
+                AccountRecord current = accountRegistry.getLiveRecord(id);
+                if (current != null) {
+                    current.markDirty();
+                }
+                return;
+            }
+
+            try {
+                repository.upsertBatch(List.of(snap));
+            } catch (SQLException e) {
+                log.warning("Cross-server flush failed for " + id + ": " + e.getMessage());
+                AccountRecord current = accountRegistry.getLiveRecord(id);
+                if (current != null) {
+                    current.markDirty();
+                }
             }
         }
     }
