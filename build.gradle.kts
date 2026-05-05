@@ -100,6 +100,12 @@ tasks.jar {
 tasks.named<ShadowJar>("shadowJar") {
     archiveClassifier.set("")
     relocate("org.bstats", "dev.alexisbinh.openeco.libs.bstats")
+    from("LICENSE") {
+        into("")
+    }
+    from("NOTICE") {
+        into("")
+    }
 }
 
 tasks.assemble {

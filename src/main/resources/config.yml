@@ -70,8 +70,9 @@ storage:
 
 accounts:
   # Account bootstrap strategy:
-  # - eager: load all account rows into memory on startup (current default behavior)
-  # - lazy: defer account loads until first access, with repository fallback for lookups
+  # - eager: preload every account row into memory at startup (recommended default)
+  # - lazy: skip startup preload and load accounts on first access, with repository fallback for lookups
+  # Changing this setting is best treated as restart-required so the live registry matches the selected mode.
   load-strategy: eager
 
 # Seconds between automatic background saves (values <= 0 are clamped to 1)

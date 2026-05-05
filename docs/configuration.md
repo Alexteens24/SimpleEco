@@ -42,6 +42,20 @@ Notes:
 - The legacy `currency.*` block is still accepted for backward compatibility, but new configs should use `currencies.*`.
 - Reloading after changing `currencies.default` switches the default-currency wrappers immediately. Named balances stay attached to their own currency ids.
 
+## Accounts
+
+```yaml
+accounts:
+  load-strategy: eager
+```
+
+Notes:
+
+- `eager` loads every stored account into memory at startup. This is the safest and most predictable choice.
+- `lazy` skips startup preload and loads accounts on first access, with repository fallback for name and identity lookups.
+- Use `lazy` if you want to reduce startup work on a server with many accounts. It trades that for first-access database reads.
+- Treat `accounts.load-strategy` as a startup setting. If you change it, restart the server so the in-memory registry matches the selected mode.
+
 ## Storage
 
 ```yaml

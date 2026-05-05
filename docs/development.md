@@ -58,6 +58,7 @@ OpenEco is an in-memory economy with a single-JVM authority and JDBC persistence
 - Account bootstrap strategy is configurable:
 	- `accounts.load-strategy: eager` loads all account rows at startup.
 	- `accounts.load-strategy: lazy` loads rows on first access and uses repository fallbacks for lookups.
+	- Changing `accounts.load-strategy` is a startup-level decision. Restart after switching modes so the live registry and the chosen mode stay aligned.
 - Live account state is held inside `AccountRegistry`.
 - Normal reads and writes do not round-trip to the database.
 - Dirty account rows are flushed in batches on the autosave interval and on clean shutdown.
