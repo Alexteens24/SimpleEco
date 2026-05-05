@@ -19,6 +19,12 @@ package dev.alexisbinh.openeco;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.junit.jupiter.api.Test;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.Objects;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -26,7 +32,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ConfigMigratorTest {
 
     @Test
-    void migratesLegacyCurrencyBlockAndRemovesOldKeys() {
+    void rewritesLegacyCurrencyBlockInTemplateOrder() {
         YamlConfiguration current = new YamlConfiguration();
         current.set("currency.id", "coins");
         current.set("currency.name-singular", "Coin");
@@ -34,53 +40,90 @@ class ConfigMigratorTest {
         current.set("currency.decimal-digits", 3);
         current.set("currency.starting-balance", 1.234);
         current.set("currency.max-balance", 999.999);
+        current.set("custom.feature.enabled", true);
 
-        YamlConfiguration defaults = new YamlConfiguration();
-        defaults.set("currencies.default", "openeco");
-        defaults.set("currencies.definitions.openeco.name-singular", "Dollar");
-        defaults.set("currencies.definitions.openeco.name-plural", "Dollars");
-        defaults.set("currencies.definitions.openeco.decimal-digits", 2);
-        defaults.set("currencies.definitions.openeco.starting-balance", 0.0);
-        defaults.set("currencies.definitions.openeco.max-balance", -1.0);
-        defaults.set("accounts.load-strategy", "eager");
+        YamlConfiguration defaults = loadBundledDefaultConfig();
+        YamlConfiguration migrated = ConfigMigrator.rewrite(current, defaults);
+        String yaml = migrated.saveToString();
+        int currenciesIndex = yaml.indexOf("currencies:");
+        int storageIndex = yaml.indexOf("storage:");
+        int accountsIndex = yaml.indexOf("accounts:");
+        int autosaveIndex = yaml.indexOf("autosave-interval:");
+        int payIndex = yaml.indexOf("pay:");
+        int baltopIndex = yaml.indexOf("baltop:");
+        int historyIndex = yaml.indexOf("history:");
+        int crossServerIndex = yaml.indexOf("cross-server:");
 
-        boolean changed = ConfigMigrator.migrate(current, defaults);
-
-        assertTrue(changed);
-        assertFalse(current.contains("currency"));
-        assertEquals("coins", current.getString("currencies.default"));
-        assertEquals("Coin", current.getString("currencies.definitions.coins.name-singular"));
-        assertEquals("Coins", current.getString("currencies.definitions.coins.name-plural"));
-        assertEquals(3, current.getInt("currencies.definitions.coins.decimal-digits"));
-        assertEquals(1.234, current.getDouble("currencies.definitions.coins.starting-balance"));
-        assertEquals(999.999, current.getDouble("currencies.definitions.coins.max-balance"));
-        assertEquals("eager", current.getString("accounts.load-strategy"));
-        assertTrue(current.contains("currencies.definitions.openeco"));
-        assertEquals("Dollar", current.getString("currencies.definitions.openeco.name-singular"));
-        assertEquals("Dollars", current.getString("currencies.definitions.openeco.name-plural"));
+        assertFalse(yaml.contains("\ncurrency:"), yaml);
+        assertTrue(currenciesIndex >= 0, yaml);
+        assertTrue(storageIndex >= 0, yaml);
+        assertTrue(accountsIndex >= 0, yaml);
+        assertTrue(autosaveIndex >= 0, yaml);
+        assertTrue(payIndex >= 0, yaml);
+        assertTrue(baltopIndex >= 0, yaml);
+        assertTrue(historyIndex >= 0, yaml);
+        assertTrue(crossServerIndex >= 0, yaml);
+        assertTrue(currenciesIndex < storageIndex,
+            () -> "currencies=" + currenciesIndex + " storage=" + storageIndex + "\n" + yaml);
+        assertTrue(storageIndex < accountsIndex,
+            () -> "storage=" + storageIndex + " accounts=" + accountsIndex + "\n" + yaml);
+        assertTrue(accountsIndex < autosaveIndex,
+            () -> "accounts=" + accountsIndex + " autosave=" + autosaveIndex + "\n" + yaml);
+        assertTrue(autosaveIndex < payIndex,
+            () -> "autosave=" + autosaveIndex + " pay=" + payIndex + "\n" + yaml);
+        assertTrue(payIndex < baltopIndex,
+            () -> "pay=" + payIndex + " baltop=" + baltopIndex + "\n" + yaml);
+        assertTrue(baltopIndex < historyIndex,
+            () -> "baltop=" + baltopIndex + " history=" + historyIndex + "\n" + yaml);
+        assertTrue(historyIndex < crossServerIndex,
+            () -> "history=" + historyIndex + " crossServer=" + crossServerIndex + "\n" + yaml);
+        assertTrue(yaml.contains("default: coins"));
+        assertTrue(migrated.getBoolean("custom.feature.enabled"));
+        assertTrue(yaml.contains("custom:"), yaml);
+        assertTrue(yaml.contains("  coins:"));
     }
 
     @Test
-    void copiesMissingDefaultsWithoutOverwritingExistingValues() {
+    void keepsCustomCurrenciesInsideTheCurrenciesSection() {
         YamlConfiguration current = new YamlConfiguration();
         current.set("currencies.default", "gems");
         current.set("currencies.definitions.gems.name-singular", "Gem");
         current.set("currencies.definitions.gems.name-plural", "Gems");
+        current.set("currencies.definitions.gems.decimal-digits", 0);
+        current.set("currencies.definitions.gems.starting-balance", 5.0);
+        current.set("currencies.definitions.gems.max-balance", 5000.0);
         current.set("custom.feature.enabled", true);
 
-        YamlConfiguration defaults = new YamlConfiguration();
-        defaults.set("currencies.default", "openeco");
-        defaults.set("currencies.definitions.openeco.name-singular", "Dollar");
-        defaults.set("currencies.definitions.openeco.name-plural", "Dollars");
-        defaults.set("accounts.load-strategy", "eager");
+        YamlConfiguration defaults = loadBundledDefaultConfig();
+        YamlConfiguration migrated = ConfigMigrator.rewrite(current, defaults);
+        String yaml = migrated.saveToString();
+        int openecoIndex = yaml.indexOf("openeco:");
+        int gemsIndex = yaml.indexOf("gems:");
+        int storageIndex = yaml.indexOf("storage:");
 
-        boolean changed = ConfigMigrator.migrate(current, defaults);
+        assertEquals("gems", migrated.getString("currencies.default"));
+        assertEquals("Gem", migrated.getString("currencies.definitions.gems.name-singular"));
+        assertEquals("Gems", migrated.getString("currencies.definitions.gems.name-plural"));
+        assertEquals("eager", migrated.getString("accounts.load-strategy"));
+        assertTrue(openecoIndex >= 0, yaml);
+        assertTrue(gemsIndex >= 0, yaml);
+        assertTrue(storageIndex >= 0, yaml);
+        assertTrue(openecoIndex < gemsIndex,
+            () -> "openeco=" + openecoIndex + " gems=" + gemsIndex + "\n" + yaml);
+        assertTrue(gemsIndex < storageIndex,
+            () -> "gems=" + gemsIndex + " storage=" + storageIndex + "\n" + yaml);
+        assertTrue(migrated.getBoolean("custom.feature.enabled"));
+        assertTrue(yaml.contains("custom:"), yaml);
+    }
 
-        assertTrue(changed);
-        assertEquals("gems", current.getString("currencies.default"));
-        assertEquals("Gem", current.getString("currencies.definitions.gems.name-singular"));
-        assertEquals("Gems", current.getString("currencies.definitions.gems.name-plural"));
-        assertEquals("eager", current.getString("accounts.load-strategy"));
-        assertTrue(current.getBoolean("custom.feature.enabled"));
+    private static YamlConfiguration loadBundledDefaultConfig() {
+        try (InputStream input = Objects.requireNonNull(
+                ConfigMigratorTest.class.getClassLoader().getResourceAsStream("config.yml"),
+                "Bundled config.yml is missing");
+             InputStreamReader reader = new InputStreamReader(input, StandardCharsets.UTF_8)) {
+            return YamlConfiguration.loadConfiguration(reader);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load bundled config.yml", e);
+        }
     }
 }

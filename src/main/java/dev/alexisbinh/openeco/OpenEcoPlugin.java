@@ -221,6 +221,7 @@ public class OpenEcoPlugin extends JavaPlugin {
     private void migrateConfig() {
         File configFile = new File(getDataFolder(), "config.yml");
         YamlConfiguration currentConfig = YamlConfiguration.loadConfiguration(configFile);
+        String originalYaml = currentConfig.saveToString();
         try (InputStream defaultConfigStream = getResource("config.yml")) {
             if (defaultConfigStream == null) {
                 getLogger().warning("Could not load bundled config.yml for migration; skipping config migration.");
@@ -229,8 +230,9 @@ public class OpenEcoPlugin extends JavaPlugin {
 
             YamlConfiguration defaultConfig = YamlConfiguration.loadConfiguration(
                     new InputStreamReader(defaultConfigStream, StandardCharsets.UTF_8));
-            if (ConfigMigrator.migrate(currentConfig, defaultConfig)) {
-                currentConfig.save(configFile);
+            YamlConfiguration migratedConfig = ConfigMigrator.rewrite(currentConfig, defaultConfig);
+            if (!migratedConfig.saveToString().equals(originalYaml)) {
+                migratedConfig.save(configFile);
                 getLogger().info("Migrated OpenEco config to the latest schema.");
             }
         } catch (IOException e) {

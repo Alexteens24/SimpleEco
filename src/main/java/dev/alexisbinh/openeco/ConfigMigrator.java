@@ -18,8 +18,11 @@ package dev.alexisbinh.openeco;
 
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 
+import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 
 final class ConfigMigrator {
 
@@ -29,18 +32,27 @@ final class ConfigMigrator {
     private ConfigMigrator() {
     }
 
-    static boolean migrate(FileConfiguration currentConfig, FileConfiguration defaultConfig) {
+    static YamlConfiguration rewrite(FileConfiguration currentConfig, FileConfiguration defaultConfig) {
         Objects.requireNonNull(currentConfig, "currentConfig");
         Objects.requireNonNull(defaultConfig, "defaultConfig");
 
-        boolean changed = migrateLegacyCurrencySection(currentConfig);
-        changed |= copyMissingDefaults(defaultConfig, currentConfig);
-        return changed;
+        YamlConfiguration normalizedSource = copySourceWithoutLegacy(currentConfig);
+        migrateLegacyCurrencySection(currentConfig, normalizedSource);
+
+        YamlConfiguration orderedConfig = new YamlConfiguration();
+        mergeSection(defaultConfig, normalizedSource, orderedConfig);
+        return orderedConfig;
     }
 
-    private static boolean migrateLegacyCurrencySection(FileConfiguration currentConfig) {
+    private static YamlConfiguration copySourceWithoutLegacy(FileConfiguration currentConfig) {
+        YamlConfiguration normalizedSource = new YamlConfiguration();
+        copySection(currentConfig, normalizedSource);
+        return normalizedSource;
+    }
+
+    private static void migrateLegacyCurrencySection(FileConfiguration currentConfig, YamlConfiguration targetConfig) {
         if (!currentConfig.isConfigurationSection(LEGACY_CURRENCY_ROOT)) {
-            return false;
+            return;
         }
 
         if (!currentConfig.isConfigurationSection(NEW_CURRENCIES_ROOT)) {
@@ -51,38 +63,69 @@ final class ConfigMigrator {
             double startingBalance = currentConfig.getDouble("currency.starting-balance", 0.0);
             double maxBalance = currentConfig.getDouble("currency.max-balance", -1.0);
 
-            currentConfig.set("currencies.default", legacyCurrencyId);
-            currentConfig.set("currencies.definitions." + legacyCurrencyId + ".name-singular", singular);
-            currentConfig.set("currencies.definitions." + legacyCurrencyId + ".name-plural", plural);
-            currentConfig.set("currencies.definitions." + legacyCurrencyId + ".decimal-digits", fractionalDigits);
-            currentConfig.set("currencies.definitions." + legacyCurrencyId + ".starting-balance", startingBalance);
-            currentConfig.set("currencies.definitions." + legacyCurrencyId + ".max-balance", maxBalance);
+            targetConfig.set("currencies.default", legacyCurrencyId);
+            targetConfig.set("currencies.definitions." + legacyCurrencyId + ".name-singular", singular);
+            targetConfig.set("currencies.definitions." + legacyCurrencyId + ".name-plural", plural);
+            targetConfig.set("currencies.definitions." + legacyCurrencyId + ".decimal-digits", fractionalDigits);
+            targetConfig.set("currencies.definitions." + legacyCurrencyId + ".starting-balance", startingBalance);
+            targetConfig.set("currencies.definitions." + legacyCurrencyId + ".max-balance", maxBalance);
         }
-
-        currentConfig.set(LEGACY_CURRENCY_ROOT, null);
-        return true;
     }
 
-    private static boolean copyMissingDefaults(ConfigurationSection source, ConfigurationSection target) {
-        boolean changed = false;
-        for (String key : source.getKeys(false)) {
-            ConfigurationSection sourceSection = source.getConfigurationSection(key);
-            if (sourceSection != null) {
-                ConfigurationSection targetSection = target.getConfigurationSection(key);
-                if (targetSection == null) {
-                    if (target.contains(key, true)) {
-                        target.set(key, null);
-                    }
-                    targetSection = target.createSection(key);
-                    changed = true;
-                }
-                changed |= copyMissingDefaults(sourceSection, targetSection);
-            } else if (!target.contains(key, true)) {
-                target.set(key, source.get(key));
-                changed = true;
+    private static void copySection(ConfigurationSection sourceSection, ConfigurationSection targetSection) {
+        for (String key : sourceSection.getKeys(false)) {
+            if (LEGACY_CURRENCY_ROOT.equals(key)) {
+                continue;
+            }
+
+            ConfigurationSection sourceChild = sourceSection.getConfigurationSection(key);
+            if (sourceChild != null) {
+                ConfigurationSection targetChild = targetSection.createSection(key);
+                copySection(sourceChild, targetChild);
+            } else {
+                targetSection.set(key, sourceSection.get(key));
             }
         }
-        return changed;
+    }
+
+    private static void mergeSection(ConfigurationSection templateSection, ConfigurationSection sourceSection,
+                                     ConfigurationSection targetSection) {
+        Set<String> templateKeys = templateSection == null ? Collections.emptySet() : templateSection.getKeys(false);
+
+        if (templateSection != null) {
+            for (String key : templateKeys) {
+                ConfigurationSection templateChild = templateSection.getConfigurationSection(key);
+                ConfigurationSection sourceChild = sourceSection == null ? null : sourceSection.getConfigurationSection(key);
+
+                if (templateChild != null) {
+                    ConfigurationSection targetChild = targetSection.createSection(key);
+                    mergeSection(templateChild, sourceChild, targetChild);
+                } else {
+                    Object value = sourceSection != null && sourceSection.contains(key)
+                            ? sourceSection.get(key)
+                            : templateSection.get(key);
+                    targetSection.set(key, value);
+                }
+            }
+        }
+
+        if (sourceSection == null) {
+            return;
+        }
+
+        for (String key : sourceSection.getKeys(false)) {
+            if (templateKeys.contains(key)) {
+                continue;
+            }
+
+            ConfigurationSection sourceChild = sourceSection.getConfigurationSection(key);
+            if (sourceChild != null) {
+                ConfigurationSection targetChild = targetSection.createSection(key);
+                mergeSection(null, sourceChild, targetChild);
+            } else {
+                targetSection.set(key, sourceSection.get(key));
+            }
+        }
     }
 
     private static String sanitized(String value, String fallback) {
