@@ -30,16 +30,21 @@ import org.junit.jupiter.api.io.TempDir;
 import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.nio.file.Path;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.logging.Logger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -77,6 +82,71 @@ class AccountServicePersistenceIntegrationTest {
             assertEquals(0, reader.countTransactions(accountId));
 
             reader.shutdown();
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
+    void lazyLoadResolvesExistingAccountsWithoutStartupPreload() throws Exception {
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "lazy-load-lookup-test");
+        try {
+            UUID accountId = UUID.randomUUID();
+            AccountService writer = newService(repository);
+            assertTrue(writer.createAccount(accountId, "Alice"));
+            assertTrue(writer.deposit(accountId, new BigDecimal("7.50")).transactionSuccess());
+            writer.shutdown();
+
+            AccountService lazyReader = newServiceWithConfig(repository, lazyConfig(0.0, -1));
+
+            assertTrue(lazyReader.hasAccount(accountId));
+            assertEquals(0, new BigDecimal("12.50").compareTo(lazyReader.getBalance(accountId)));
+            assertTrue(lazyReader.findByName("Alice").isPresent());
+            assertEquals("Alice", lazyReader.getUUIDNameMap().get(accountId));
+            assertTrue(lazyReader.getAccountNames().contains("Alice"));
+
+            lazyReader.shutdown();
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
+    void lazyLoadSupportsMutationsAgainstPreviouslyUnloadedAccounts() throws Exception {
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "lazy-load-mutation-test");
+        try {
+            UUID accountId = UUID.randomUUID();
+            AccountService writer = newService(repository);
+            assertTrue(writer.createAccount(accountId, "Alice"));
+            writer.shutdown();
+
+            AccountService lazyService = newServiceWithConfig(repository, lazyConfig(0.0, -1));
+            assertTrue(lazyService.deposit(accountId, new BigDecimal("2.00")).transactionSuccess());
+            lazyService.shutdown();
+
+            AccountService reader = newService(repository);
+            reader.loadAll();
+            assertEquals(0, new BigDecimal("7.00").compareTo(reader.getBalance(accountId)));
+            reader.shutdown();
+        } finally {
+            repository.close();
+        }
+    }
+
+    @Test
+    void lazyLoadCreateStillRejectsPersistedNameCollisions() throws Exception {
+        JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "lazy-load-name-conflict-test");
+        try {
+            UUID existingId = UUID.randomUUID();
+            AccountService writer = newService(repository);
+            assertTrue(writer.createAccount(existingId, "Alice"));
+            writer.shutdown();
+
+            AccountService lazyService = newServiceWithConfig(repository, lazyConfig(0.0, -1));
+            AccountService.CreateAccountStatus status = lazyService.createAccountDetailed(UUID.randomUUID(), "Alice");
+
+            assertEquals(AccountService.CreateAccountStatus.NAME_IN_USE, status);
+            lazyService.shutdown();
         } finally {
             repository.close();
         }
@@ -240,6 +310,45 @@ class AccountServicePersistenceIntegrationTest {
             assertTrue(reader.hasAccount(accountId));
             assertEquals("Alice", reader.getAccount(accountId).orElseThrow().getLastKnownName());
             assertEquals(0, new BigDecimal("12.50").compareTo(reader.getBalance(accountId)));
+
+            writer.shutdown();
+            reader.shutdown();
+        } finally {
+            writerRepository.close();
+            readerRepository.close();
+        }
+    }
+
+    @Test
+    void refreshAccountKeepsLiveRecordIdentityWhileApplyingFreshSnapshot() throws Exception {
+        String filename = "cross-server-refresh-identity-test";
+        UUID accountId = UUID.randomUUID();
+
+        JdbcAccountRepository writerRepository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), filename);
+        JdbcAccountRepository readerRepository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), filename);
+        try {
+            AccountService writer = newService(writerRepository);
+            AccountService reader = newService(readerRepository);
+            writer.loadAll();
+            reader.loadAll();
+
+            assertTrue(writer.createAccount(accountId, "Alice"));
+            writer.flushAccount(accountId);
+
+            reader.refreshAccount(accountId);
+            assertTrue(reader.hasAccount(accountId));
+            AccountRecord beforeRefresh = getLiveRecord(reader, accountId);
+            assertNotNull(beforeRefresh);
+
+            assertTrue(writer.deposit(accountId, new BigDecimal("10.00")).transactionSuccess());
+            writer.flushAccount(accountId);
+
+            reader.refreshAccount(accountId);
+
+            AccountRecord afterRefresh = getLiveRecord(reader, accountId);
+            assertNotNull(afterRefresh);
+            assertSame(beforeRefresh, afterRefresh);
+            assertEquals(0, new BigDecimal("15.00").compareTo(reader.getBalance(accountId)));
 
             writer.shutdown();
             reader.shutdown();
@@ -452,6 +561,37 @@ class AccountServicePersistenceIntegrationTest {
     }
 
     @Test
+    void flushAccountDoesNotResurrectAccountDeletedWhileFlushIsInFlight() throws Exception {
+        BlockingRepository repository = new BlockingRepository(true);
+        AccountService service = newService(repository);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+
+        try {
+            UUID accountId = UUID.randomUUID();
+
+            assertTrue(service.createAccount(accountId, "Alice"));
+
+            Future<?> flushFuture = executor.submit(() -> service.flushAccount(accountId));
+            assertTrue(repository.upsertStarted.await(2, TimeUnit.SECONDS));
+
+            Future<Boolean> deleteFuture = executor.submit(() -> service.deleteAccount(accountId));
+            assertThrows(TimeoutException.class, () -> deleteFuture.get(200, TimeUnit.MILLISECONDS));
+
+            repository.allowUpsert.countDown();
+
+            flushFuture.get(2, TimeUnit.SECONDS);
+            assertTrue(deleteFuture.get(2, TimeUnit.SECONDS));
+            assertFalse(repository.loadAccount(accountId).isPresent());
+
+            service.shutdown();
+        } finally {
+            repository.allowUpsert.countDown();
+            executor.shutdownNow();
+            executor.awaitTermination(2, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void payWithTaxTransfersCorrectAmountsAndLogsBothEntries() throws Exception {
         JdbcAccountRepository repository = new JdbcAccountRepository(DatabaseDialect.H2, tempDir.toString(), "pay-tax-test");
         try {
@@ -608,6 +748,16 @@ class AccountServicePersistenceIntegrationTest {
         return newServiceWithConfig(repository, testConfig(0.0, -1));
     }
 
+    private static AccountRecord getLiveRecord(AccountService service, UUID id) throws Exception {
+        Field registryField = AccountService.class.getDeclaredField("accountRegistry");
+        registryField.setAccessible(true);
+        Object registry = registryField.get(service);
+
+        Method getLiveRecord = registry.getClass().getDeclaredMethod("getLiveRecord", UUID.class);
+        getLiveRecord.setAccessible(true);
+        return (AccountRecord) getLiveRecord.invoke(registry, id);
+    }
+
     private static AccountService newServiceWithConfig(AccountRepository repository, YamlConfiguration config) {
         return new AccountService(
                 repository,
@@ -632,6 +782,7 @@ class AccountServicePersistenceIntegrationTest {
 
     private static YamlConfiguration testConfig(double taxPercent, int retentionDays) {
         YamlConfiguration config = new YamlConfiguration();
+        config.set("accounts.load-strategy", "eager");
         config.set("currency.id", "openeco");
         config.set("currency.name-singular", "Dollar");
         config.set("currency.name-plural", "Dollars");
@@ -643,6 +794,12 @@ class AccountServicePersistenceIntegrationTest {
         config.set("pay.min-amount", 0.01);
         config.set("baltop.cache-ttl-seconds", 30);
         config.set("history.retention-days", retentionDays);
+        return config;
+    }
+
+    private static YamlConfiguration lazyConfig(double taxPercent, int retentionDays) {
+        YamlConfiguration config = testConfig(taxPercent, retentionDays);
+        config.set("accounts.load-strategy", "lazy");
         return config;
     }
 
@@ -676,9 +833,19 @@ class AccountServicePersistenceIntegrationTest {
         private final CountDownLatch transactionInsertStarted = new CountDownLatch(1);
         private final CountDownLatch allowTransactionInsert = new CountDownLatch(1);
         private final CountDownLatch upsertStarted = new CountDownLatch(1);
+        private final CountDownLatch allowUpsert = new CountDownLatch(1);
+        private final boolean blockUpsert;
         private final List<TransactionEntry> transactions = new ArrayList<>();
         private List<AccountRecord> lastUpsertedRecords = List.of();
         private int upsertCalls;
+
+        private BlockingRepository() {
+            this(false);
+        }
+
+        private BlockingRepository(boolean blockUpsert) {
+            this.blockUpsert = blockUpsert;
+        }
 
         @Override
         public synchronized List<AccountRecord> loadAll() {
@@ -692,17 +859,56 @@ class AccountServicePersistenceIntegrationTest {
         }
 
         @Override
-        public synchronized void upsertBatch(Collection<AccountRecord> records) {
-            lastUpsertedRecords = records.stream()
-                    .map(AccountRecord::snapshot)
-                    .toList();
-            upsertCalls++;
-            upsertStarted.countDown();
+        public synchronized java.util.Optional<AccountRecord> loadAccountByName(String name) {
+            if (name == null) {
+                return java.util.Optional.empty();
+            }
+            String normalized = name.trim().toLowerCase(java.util.Locale.ROOT);
+            if (normalized.isEmpty()) {
+                return java.util.Optional.empty();
+            }
+            return lastUpsertedRecords.stream()
+                    .filter(r -> r.getLastKnownName().toLowerCase(java.util.Locale.ROOT).equals(normalized))
+                    .findFirst()
+                    .map(AccountRecord::snapshot);
         }
 
         @Override
-        public void delete(UUID accountId) {
-            // No-op for this test repository.
+        public synchronized Map<UUID, String> loadUUIDNameMap() {
+            Map<UUID, String> map = new HashMap<>();
+            for (AccountRecord record : lastUpsertedRecords) {
+                map.put(record.getId(), record.getLastKnownName());
+            }
+            return map;
+        }
+
+        @Override
+        public void upsertBatch(Collection<AccountRecord> records) {
+            upsertStarted.countDown();
+            if (blockUpsert) {
+                try {
+                    if (!allowUpsert.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("Timed out waiting to allow account upsert");
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("Interrupted while waiting to allow account upsert", e);
+                }
+            }
+
+            synchronized (this) {
+                lastUpsertedRecords = records.stream()
+                        .map(AccountRecord::snapshot)
+                        .toList();
+                upsertCalls++;
+            }
+        }
+
+        @Override
+        public synchronized void delete(UUID accountId) {
+            lastUpsertedRecords = lastUpsertedRecords.stream()
+                    .filter(record -> !record.getId().equals(accountId))
+                    .toList();
         }
 
         @Override

@@ -140,6 +140,27 @@ final class AccountRegistry {
         return true;
     }
 
+    boolean refreshInPlace(AccountRecord freshRecord) {
+        AccountRecord live = accounts.get(freshRecord.getId());
+        if (live == null) {
+            return create(freshRecord);
+        }
+
+        String newKey = normalizeName(freshRecord.getLastKnownName());
+        UUID owner = nameIndex.get(newKey);
+        if (owner != null && !owner.equals(freshRecord.getId())) {
+            return false;
+        }
+
+        String oldKey = normalizeName(live.getLastKnownName());
+        live.overwriteFrom(freshRecord);
+        nameIndex.put(newKey, freshRecord.getId());
+        if (!oldKey.equals(newKey)) {
+            nameIndex.remove(oldKey, freshRecord.getId());
+        }
+        return true;
+    }
+
     void restore(AccountRecord record) {
         accounts.put(record.getId(), record);
         nameIndex.put(normalizeName(record.getLastKnownName()), record.getId());
